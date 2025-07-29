@@ -6,7 +6,7 @@
 export * from './types/protocol';
 
 // Core components
-export { UnixSocketClient, UnixSocketClientError } from './core/unix-socket-client';
+export { UnixDatagramClient, UnixDatagramClientError } from './core/unix-datagram-client';
 export { UnixSocketServer, UnixSocketServerError } from './server/unix-socket-server';
 export { SecurityValidator, ValidationResult } from './core/security-validator';
 export { MessageFraming, MessageFramingError } from './core/message-framing';

@@ -7,11 +7,48 @@
 
 import { APIClient } from '../api/api-client';
 import * as path from 'path';
-import * as os from 'os';
 import * as fs from 'fs';
 
-const SOCKET_PATH = path.join(os.tmpdir(), 'typescript-unix-sock-api-example.sock');
-const API_SPEC_PATH = path.join(__dirname, '../../..', 'example-api-spec.json');
+// Parse command line arguments
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let socketPath = path.join('/tmp', 'typescript-unix-sock-api-example.sock');
+  let specPath = path.join(__dirname, '../../..', 'example-api-spec.json');
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg) continue;
+    
+    // Handle --socket-path=value format
+    if (arg.startsWith('--socket-path=')) {
+      socketPath = arg.substring('--socket-path='.length);
+    }
+    // Handle --socket-path value format
+    else if (arg === '--socket-path' && i + 1 < args.length) {
+      const nextArg = args[i + 1];
+      if (nextArg) {
+        socketPath = nextArg;
+        i++;
+      }
+    }
+    // Handle --spec=value format
+    else if (arg.startsWith('--spec=')) {
+      specPath = arg.substring('--spec='.length);
+    }
+    // Handle --spec value format
+    else if (arg === '--spec' && i + 1 < args.length) {
+      const nextArg = args[i + 1];
+      if (nextArg) {
+        specPath = nextArg;
+        i++;
+      }
+    }
+  }
+
+  return { socketPath, specPath };
+}
+
+const { socketPath: SOCKET_PATH, specPath: API_SPEC_PATH } = parseArgs();
 
 async function main() {
   console.log('🚀 Starting TypeScript Unix Socket API Client Example');

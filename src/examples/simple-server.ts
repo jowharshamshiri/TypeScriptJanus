@@ -7,9 +7,34 @@
 
 import { UnixSocketServer } from '../server/unix-socket-server';
 import * as path from 'path';
-import * as os from 'os';
 
-const SOCKET_PATH = path.join(os.tmpdir(), 'typescript-unix-sock-api-example.sock');
+// Parse command line arguments
+function parseArgs() {
+  const args = process.argv.slice(2);
+  let socketPath = path.join('/tmp', 'typescript-unix-sock-api-example.sock');
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg) continue;
+    
+    // Handle --socket-path=value format
+    if (arg.startsWith('--socket-path=')) {
+      socketPath = arg.substring('--socket-path='.length);
+    }
+    // Handle --socket-path value format
+    else if (arg === '--socket-path' && i + 1 < args.length) {
+      const nextArg = args[i + 1];
+      if (nextArg) {
+        socketPath = nextArg;
+        i++;
+      }
+    }
+  }
+
+  return { socketPath };
+}
+
+const { socketPath: SOCKET_PATH } = parseArgs();
 
 async function main() {
   console.log('🚀 Starting TypeScript Unix Socket API Server Example');

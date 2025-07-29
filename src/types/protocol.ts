@@ -13,6 +13,9 @@ export interface SocketCommand {
   /** Command name (1-256 chars, alphanumeric + '-_') */
   command: string;
   
+  /** Socket path for response (SOCK_DGRAM connectionless communication) */
+  reply_to?: string;
+  
   /** Command arguments object (max 5MB) */
   args?: Record<string, any>;
   

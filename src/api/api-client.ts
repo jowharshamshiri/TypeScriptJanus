@@ -3,7 +3,7 @@
  * Provides convenient interface for API specification based communication
  */
 
-import { UnixSocketClient, UnixSocketClientError } from '../core/unix-socket-client';
+import { UnixDatagramClient, UnixDatagramClientError } from '../core/unix-datagram-client';
 import { APISpecification, ConnectionConfig } from '../types/protocol';
 
 export class APIClientError extends Error {
@@ -25,7 +25,7 @@ export interface APIClientConfig extends ConnectionConfig {
 }
 
 export class APIClient {
-  private client: UnixSocketClient;
+  private client: UnixDatagramClient;
   private config: APIClientConfig;
   private apiSpec: APISpecification | undefined;
 
@@ -33,7 +33,7 @@ export class APIClient {
     this.config = config;
     this.apiSpec = config.apiSpec;
     
-    // Create underlying socket client
+    // Create underlying datagram client
     const clientConfig: ConnectionConfig = {
       socketPath: config.socketPath
     };
@@ -43,7 +43,7 @@ export class APIClient {
     if (config.connectionTimeout !== undefined) clientConfig.connectionTimeout = config.connectionTimeout;
     if (config.maxPendingCommands !== undefined) clientConfig.maxPendingCommands = config.maxPendingCommands;
     
-    this.client = new UnixSocketClient(clientConfig);
+    this.client = new UnixDatagramClient(clientConfig);
 
     // Setup event forwarding
     this.setupEventForwarding();
