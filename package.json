@@ -1,0 +1,50 @@
+{
+  "name": "typescript-unix-sock-api",
+  "version": "1.0.0",
+  "description": "TypeScript implementation of the Unix Socket API Protocol",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "dev": "ts-node src/index.ts",
+    "server": "ts-node src/examples/simple-server.ts",
+    "client": "ts-node src/examples/simple-client.ts",
+    "docs:generate": "ts-node src/examples/generate-docs.ts",
+    "docs:serve": "node docs/generated/serve.js",
+    "lint": "eslint src/**/*.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "unix-socket",
+    "ipc",
+    "api",
+    "typescript",
+    "cross-platform"
+  ],
+  "author": "UnixSocketAPI Project",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/jest": "^29.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "uuid": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
+}
