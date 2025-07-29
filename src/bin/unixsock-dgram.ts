@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import * as dgram from 'dgram';
 import * as fs from 'fs';
+import * as net from 'net';
 import { SocketCommand, SocketResponse } from '../types/protocol.js';
-import { UnixDatagramClient } from '../core/unix-datagram-client.js';
 
 const program = new Command();
 
@@ -41,7 +40,7 @@ async function listenForDatagrams(socketPath: string): Promise<void> {
         // Ignore if doesn't exist
     }
     
-    const socket = dgram.createSocket('udp4'); // Note: Will need proper unix domain socket support
+    const socket = dgram.createSocket('unix_dgram');
     
     socket.on('message', (buffer: Buffer) => {
         try {
@@ -61,7 +60,7 @@ async function listenForDatagrams(socketPath: string): Promise<void> {
         console.error('Socket error:', error);
     });
     
-    socket.bind(8080); // TODO: Convert to proper unix domain socket path
+    socket.bind(socketPath);
     console.log('Ready to receive datagrams');
     
     // Graceful shutdown
@@ -154,9 +153,9 @@ function sendResponse(
     const responseData = Buffer.from(JSON.stringify(response));
     
     // Send response datagram to reply_to socket
-    const replySocket = dgram.createSocket('udp4'); // Note: Will need proper unix domain socket support
+    const replySocket = dgram.createSocket('unix_dgram');
     
-    replySocket.send(responseData, 8081, 'localhost', (error) => { // TODO: Fix for unix domain sockets
+    replySocket.send(responseData, _replyTo, (error) => {
         if (error) {
             console.error('Failed to send response:', error);
         }
