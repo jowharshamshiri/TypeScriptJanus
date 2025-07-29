@@ -9,9 +9,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "dev": "ts-node src/index.ts",
-    "server": "ts-node src/examples/simple-server.ts",
-    "client": "ts-node src/examples/simple-client.ts",
-    "docs:generate": "ts-node src/examples/generate-docs.ts",
+    "unixsock-dgram": "ts-node src/bin/unixsock-dgram.ts",
+    "docs:generate": "ts-node src/docs/api-doc-generator.ts",
     "docs:serve": "node docs/generated/serve.js",
     "lint": "eslint src/**/*.ts",
     "clean": "rm -rf dist"
@@ -26,8 +25,8 @@
   "author": "UnixSockAPI Project",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^20.0.0",
     "@types/jest": "^29.0.0",
+    "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",
@@ -37,6 +36,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "commander": "^11.1.0",
     "uuid": "^9.0.0"
   },
   "engines": {

@@ -74,10 +74,13 @@ async function main() {
   });
 
   try {
-    // Connect to server
-    console.log('🔌 Connecting to server...');
-    await client.connect();
-    console.log('✅ Connected successfully');
+    // Test server connectivity (SOCK_DGRAM is connectionless)
+    console.log('🔌 Testing server connectivity...');
+    const isReachable = await client.testConnection();
+    if (!isReachable) {
+      throw new Error('Server is not reachable');
+    }
+    console.log('✅ Server is reachable');
 
     // Show available channels and commands
     if (apiSpec) {
@@ -96,13 +99,8 @@ async function main() {
   } catch (error) {
     console.error('❌ Client error:', error);
   } finally {
-    // Disconnect
-    try {
-      await client.disconnect();
-      console.log('👋 Disconnected from server');
-    } catch (error) {
-      console.error('⚠️ Error during disconnect:', error);
-    }
+    // No explicit disconnect needed for SOCK_DGRAM (connectionless)
+    console.log('👋 Client finished');
   }
 }
 

@@ -3,8 +3,8 @@
  * Provides convenient interface for API specification based communication
  */
 
-import { UnixDatagramClient, UnixDatagramClientError } from '../core/unix-datagram-client';
-import { APISpecification, ConnectionConfig } from '../types/protocol';
+import { UnixDatagramClient } from '../core/unix-datagram-client';
+import { APISpecification, ConnectionConfig, SocketCommand } from '../types/protocol';
 
 export class APIClientError extends Error {
   constructor(message: string, public code: string, public details?: string) {
@@ -50,32 +50,13 @@ export class APIClient {
   }
 
   /**
-   * Connect to the API server
+   * Test connectivity to the API server
    */
-  async connect(): Promise<void> {
+  async testConnection(): Promise<boolean> {
     try {
-      await this.client.connect();
+      return await this.client.testConnection();
     } catch (error) {
-      throw new APIClientError(
-        'Failed to connect to API server',
-        'CONNECTION_FAILED',
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-
-  /**
-   * Disconnect from the API server
-   */
-  async disconnect(): Promise<void> {
-    try {
-      await this.client.disconnect();
-    } catch (error) {
-      throw new APIClientError(
-        'Failed to disconnect from API server',
-        'DISCONNECTION_FAILED',
-        error instanceof Error ? error.message : String(error)
-      );
+      return false;
     }
   }
 
@@ -94,7 +75,16 @@ export class APIClient {
     }
 
     try {
-      const response = await this.client.sendCommand(channelId, commandName, args, timeout);
+      const command: Omit<SocketCommand, 'reply_to'> = {
+        id: this.generateCommandId(),
+        channelId,
+        command: commandName,
+        ...(args && { args }),
+        ...(timeout && { timeout }),
+        timestamp: new Date().toISOString()
+      };
+      
+      const response = await this.client.sendCommand(command);
       
       if (!response.success) {
         throw new APIClientError(
@@ -106,14 +96,14 @@ export class APIClient {
       
       return response.result;
     } catch (error) {
-      if (error instanceof UnixSocketClientError) {
-        throw new APIClientError(
-          error.message,
-          error.code,
-          error.details
-        );
+      if (error instanceof APIClientError) {
+        throw error; // Re-throw API errors as-is
       }
-      throw error;
+      throw new APIClientError(
+        error instanceof Error ? error.message : String(error),
+        'COMMAND_EXECUTION_FAILED',
+        error instanceof Error ? error.stack : undefined
+      );
     }
   }
 
@@ -227,17 +217,10 @@ export class APIClient {
   }
 
   /**
-   * Get connection status
+   * Test if server is reachable (SOCK_DGRAM has no persistent connection)
    */
-  isConnected(): boolean {
-    return this.client.isConnected();
-  }
-
-  /**
-   * Get pending commands count
-   */
-  getPendingCommandsCount(): number {
-    return this.client.getPendingCommandsCount();
+  async isReachable(): Promise<boolean> {
+    return this.testConnection();
   }
 
   /**
@@ -245,6 +228,13 @@ export class APIClient {
    */
   channel(channelId: string): ChannelProxy {
     return new ChannelProxy(this, channelId);
+  }
+
+  /**
+   * Generate unique command ID
+   */
+  private generateCommandId(): string {
+    return require('crypto').randomUUID();
   }
 
   /**
