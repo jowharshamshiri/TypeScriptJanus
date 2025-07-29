@@ -23,7 +23,7 @@
     "typescript",
     "cross-platform"
   ],
-  "author": "UnixSocketAPI Project",
+  "author": "UnixSockAPI Project",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.0.0",
