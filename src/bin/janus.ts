@@ -2,15 +2,16 @@
 
 import { Command } from 'commander';
 import * as fs from 'fs';
-import * as net from 'net';
+import * as dgram from 'dgram';
 import { SocketCommand, SocketResponse } from '../types/protocol.js';
+import { UnixDatagramClient } from '../core/unix-datagram-client.js';
 
 const program = new Command();
 
 program
-  .name('unixsock-dgram')
+  .name('janus-dgram')
   .description('Unified SOCK_DGRAM Unix Socket Process')
-  .option('-s, --socket <path>', 'Unix socket path', '/tmp/typescript-unixsock.sock')
+  .option('-s, --socket <path>', 'Unix socket path', '/tmp/typescript-janus.sock')
   .option('-l, --listen', 'Listen for datagrams on socket')
   .option('--send-to <path>', 'Send datagram to socket path')
   .option('-c, --command <cmd>', 'Command to send', 'ping')
@@ -40,7 +41,8 @@ async function listenForDatagrams(socketPath: string): Promise<void> {
         // Ignore if doesn't exist
     }
     
-    const socket = dgram.createSocket('unix_dgram');
+    // TODO: Use proper Unix domain socket - Node.js dgram doesn't support unix_dgram
+    const socket = dgram.createSocket('udp4');
     
     socket.on('message', (buffer: Buffer) => {
         try {
@@ -56,7 +58,7 @@ async function listenForDatagrams(socketPath: string): Promise<void> {
         }
     });
     
-    socket.on('error', (error) => {
+    socket.on('error', (error: Error) => {
         console.error('Socket error:', error);
     });
     
@@ -155,7 +157,7 @@ function sendResponse(
     // Send response datagram to reply_to socket
     const replySocket = dgram.createSocket('unix_dgram');
     
-    replySocket.send(responseData, _replyTo, (error) => {
+    replySocket.send(responseData, _replyTo, (error?: Error | null) => {
         if (error) {
             console.error('Failed to send response:', error);
         }

@@ -5,7 +5,7 @@
  * Demonstrates basic server setup with command handlers
  */
 
-import { UnixSocketServer } from '../server/unix-socket-server';
+import { JanusServer } from '../server/janus-server';
 import * as path from 'path';
 
 // Parse command line arguments
@@ -41,7 +41,7 @@ async function main() {
   console.log(`📍 Socket path: ${SOCKET_PATH}`);
 
   // Create server
-  const server = new UnixSocketServer({
+  const server = new JanusServer({
     socketPath: SOCKET_PATH,
     maxConnections: 10,
     defaultTimeout: 30.0,
@@ -69,7 +69,7 @@ async function main() {
   setupGracefulShutdown(server);
 }
 
-function setupCommandHandlers(server: UnixSocketServer) {
+function setupCommandHandlers(server: JanusServer) {
   // User service commands
   server.registerCommandHandler('user-service', 'create-user', async (args) => {
     console.log('📝 Creating user:', args);
@@ -212,7 +212,7 @@ function setupCommandHandlers(server: UnixSocketServer) {
   console.log('   • echo-service: echo, ping');
 }
 
-function setupEventListeners(server: UnixSocketServer) {
+function setupEventListeners(server: JanusServer) {
   server.on('listening', () => {
     console.log('👂 Server is listening for connections');
   });
@@ -239,7 +239,7 @@ function setupEventListeners(server: UnixSocketServer) {
   });
 }
 
-function setupGracefulShutdown(server: UnixSocketServer) {
+function setupGracefulShutdown(server: JanusServer) {
   const shutdown = async (signal: string) => {
     console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
     

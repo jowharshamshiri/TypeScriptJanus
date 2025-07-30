@@ -10,7 +10,7 @@ import { SocketCommand, SocketResponse, CommandHandler, CommandHandlerRegistry }
 import { MessageFraming, MessageFramingError } from '../core/message-framing';
 import { SecurityValidator } from '../core/security-validator';
 
-export interface UnixSocketServerEvents {
+export interface JanusServerEvents {
   'listening': () => void;
   'connection': (clientId: string) => void;
   'disconnection': (clientId: string) => void;
@@ -19,10 +19,10 @@ export interface UnixSocketServerEvents {
   'error': (error: Error) => void;
 }
 
-export class UnixSocketServerError extends Error {
+export class JanusServerError extends Error {
   constructor(message: string, public code: string, public details?: string) {
     super(message);
-    this.name = 'UnixSocketServerError';
+    this.name = 'JanusServerError';
   }
 }
 
@@ -54,7 +54,7 @@ interface ClientConnection {
   lastActivity: Date;
 }
 
-export class UnixSocketServer extends EventEmitter {
+export class JanusServer extends EventEmitter {
   private server: net.Server | null = null;
   private config: Required<ServerConfig>;
   private validator: SecurityValidator;
@@ -82,7 +82,7 @@ export class UnixSocketServer extends EventEmitter {
     // Validate socket path
     const pathValidation = this.validator.validateSocketPath(this.config.socketPath);
     if (!pathValidation.valid) {
-      throw new UnixSocketServerError(
+      throw new JanusServerError(
         pathValidation.error!,
         pathValidation.code!,
         pathValidation.details
@@ -97,7 +97,7 @@ export class UnixSocketServer extends EventEmitter {
     // Validate inputs
     const channelValidation = this.validator.validateName(channelId, 'channel');
     if (!channelValidation.valid) {
-      throw new UnixSocketServerError(
+      throw new JanusServerError(
         channelValidation.error!,
         channelValidation.code!,
         channelValidation.details
@@ -106,7 +106,7 @@ export class UnixSocketServer extends EventEmitter {
 
     const commandValidation = this.validator.validateName(commandName, 'command');
     if (!commandValidation.valid) {
-      throw new UnixSocketServerError(
+      throw new JanusServerError(
         commandValidation.error!,
         commandValidation.code!,
         commandValidation.details
@@ -166,7 +166,7 @@ export class UnixSocketServer extends EventEmitter {
       });
       
       this.server.on('error', (error) => {
-        this.emit('error', new UnixSocketServerError(
+        this.emit('error', new JanusServerError(
           'Server error',
           'SERVER_ERROR',
           error.message
@@ -222,7 +222,7 @@ export class UnixSocketServer extends EventEmitter {
   async sendResponse(clientId: string, response: SocketResponse): Promise<void> {
     const client = this.clients.get(clientId);
     if (!client) {
-      throw new UnixSocketServerError(
+      throw new JanusServerError(
         'Client not found',
         'CLIENT_NOT_FOUND',
         `No client with ID ${clientId}`
@@ -232,7 +232,7 @@ export class UnixSocketServer extends EventEmitter {
     // Validate response
     const responseValidation = this.validator.validateResponse(response);
     if (!responseValidation.valid) {
-      throw new UnixSocketServerError(
+      throw new JanusServerError(
         responseValidation.error!,
         responseValidation.code!,
         responseValidation.details
@@ -245,7 +245,7 @@ export class UnixSocketServer extends EventEmitter {
       return new Promise((resolve, reject) => {
         client.socket.write(encoded, (error) => {
           if (error) {
-            reject(new UnixSocketServerError(
+            reject(new JanusServerError(
               'Failed to send response',
               'SEND_ERROR',
               error.message
@@ -259,7 +259,7 @@ export class UnixSocketServer extends EventEmitter {
       });
     } catch (error) {
       if (error instanceof MessageFramingError) {
-        throw new UnixSocketServerError(
+        throw new JanusServerError(
           'Response encoding failed',
           error.code,
           error.message
@@ -322,7 +322,7 @@ export class UnixSocketServer extends EventEmitter {
     });
     
     socket.on('error', (error) => {
-      this.emit('error', new UnixSocketServerError(
+      this.emit('error', new JanusServerError(
         'Client socket error',
         'CLIENT_SOCKET_ERROR',
         `Client ${clientId}: ${error.message}`
@@ -363,7 +363,7 @@ export class UnixSocketServer extends EventEmitter {
         this.handleClientMessage(clientId, message);
       }
     } catch (error) {
-      this.emit('error', new UnixSocketServerError(
+      this.emit('error', new JanusServerError(
         'Message processing failed',
         'MESSAGE_PROCESSING_ERROR',
         `Client ${clientId}: ${error instanceof Error ? error.message : String(error)}`
@@ -458,7 +458,7 @@ export class UnixSocketServer extends EventEmitter {
     try {
       await this.sendResponse(clientId, errorResponse);
     } catch (sendError) {
-      this.emit('error', new UnixSocketServerError(
+      this.emit('error', new JanusServerError(
         'Failed to send error response',
         'ERROR_RESPONSE_FAILED',
         `Client ${clientId}: ${sendError instanceof Error ? sendError.message : String(sendError)}`
@@ -516,16 +516,16 @@ export class UnixSocketServer extends EventEmitter {
   }
 
   // Event emitter type safety
-  override on<K extends keyof UnixSocketServerEvents>(
+  override on<K extends keyof JanusServerEvents>(
     event: K,
-    listener: UnixSocketServerEvents[K]
+    listener: JanusServerEvents[K]
   ): this {
     return super.on(event, listener);
   }
 
-  override emit<K extends keyof UnixSocketServerEvents>(
+  override emit<K extends keyof JanusServerEvents>(
     event: K,
-    ...args: Parameters<UnixSocketServerEvents[K]>
+    ...args: Parameters<JanusServerEvents[K]>
   ): boolean {
     return super.emit(event, ...args);
   }

@@ -9,7 +9,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "dev": "ts-node src/index.ts",
-    "unixsock-dgram": "ts-node src/bin/unixsock-dgram.ts",
+    "janus": "ts-node src/bin/janus.ts",
     "docs:generate": "ts-node src/docs/api-doc-generator.ts",
     "docs:serve": "node docs/generated/serve.js",
     "lint": "eslint src/**/*.ts",
@@ -22,7 +22,7 @@
     "typescript",
     "cross-platform"
   ],
-  "author": "UnixSockAPI Project",
+  "author": "Janus Project",
   "license": "MIT",
   "devDependencies": {
     "@types/jest": "^29.0.0",

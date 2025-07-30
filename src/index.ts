@@ -7,7 +7,7 @@ export * from './types/protocol';
 
 // Core components
 export { UnixDatagramClient, UnixDatagramClientError } from './core/unix-datagram-client';
-export { UnixSocketServer, UnixSocketServerError } from './server/unix-socket-server';
+export { JanusServer, JanusServerError } from './server/janus-server';
 export { SecurityValidator, ValidationResult } from './core/security-validator';
 export { MessageFraming, MessageFramingError } from './core/message-framing';
 export { ResponseTracker, ResponseTrackerError } from './core/response-tracker';

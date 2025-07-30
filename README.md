@@ -23,9 +23,9 @@ npm install typescript-unix-sock-api
 ### Server Example
 
 ```typescript
-import { UnixSocketServer } from 'typescript-unix-sock-api';
+import { JanusServer } from 'typescript-unix-sock-api';
 
-const server = new UnixSocketServer({
+const server = new JanusServer({
   socketPath: '/tmp/my-app.sock',
   maxConnections: 100,
   defaultTimeout: 30.0
@@ -113,8 +113,8 @@ The implementation includes comprehensive security validation:
 
 ### Core Components
 
-- **UnixSocketClient**: Low-level socket client with async message handling
-- **UnixSocketServer**: Server with command routing and handler management
+- **JanusClient**: Low-level socket client with async message handling
+- **JanusServer**: Server with command routing and handler management
 - **APIClient**: High-level client with API specification support
 - **SecurityValidator**: Comprehensive security validation framework
 - **MessageFraming**: 4-byte length prefix message framing
