@@ -1,5 +1,5 @@
 /**
- * Security Validator for Unix Socket API Protocol
+ * Security Validator for Janus Protocol
  * Implements comprehensive security validation (25+ mechanisms)
  */
 

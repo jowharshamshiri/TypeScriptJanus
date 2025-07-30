@@ -1,7 +1,7 @@
 {
   "name": "typescript-unix-sock-api",
   "version": "1.0.0",
-  "description": "TypeScript implementation of the Unix Socket API Protocol",
+  "description": "TypeScript implementation of the Janus Protocol",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

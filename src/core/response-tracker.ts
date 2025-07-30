@@ -1,5 +1,5 @@
 /**
- * Response Tracker for Unix Socket API Protocol
+ * Response Tracker for Janus Protocol
  * Manages async response correlation and timeout handling
  */
 

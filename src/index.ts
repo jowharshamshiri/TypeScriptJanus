@@ -1,5 +1,5 @@
 /**
- * TypeScript Unix Socket API - Main Export File
+ * TypeScript Janus - Main Export File
  */
 
 // Core types

@@ -1,5 +1,5 @@
 /**
- * Unix Datagram Client for Unix Socket API Protocol
+ * Unix Datagram Client for Janus Protocol
  * Implements connectionless SOCK_DGRAM communication
  */
 

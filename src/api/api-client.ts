@@ -1,5 +1,5 @@
 /**
- * High-level API Client for Unix Socket API Protocol
+ * High-level API Client for Janus Protocol
  * Provides convenient interface for API specification based communication
  */
 

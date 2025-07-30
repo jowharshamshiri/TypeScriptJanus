@@ -1,5 +1,5 @@
 /**
- * Message Framing for Unix Socket API Protocol
+ * Message Framing for Janus Protocol
  * Implements 4-byte big-endian length prefix framing
  */
 

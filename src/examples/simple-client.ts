@@ -1,7 +1,7 @@
 #!/usr/bin/env ts-node
 
 /**
- * Simple client example for TypeScript Unix Socket API
+ * Simple client example for TypeScript Janus
  * Demonstrates basic client usage and command execution
  */
 
@@ -51,7 +51,7 @@ function parseArgs() {
 const { socketPath: SOCKET_PATH, specPath: API_SPEC_PATH } = parseArgs();
 
 async function main() {
-  console.log('🚀 Starting TypeScript Unix Socket API Client Example');
+  console.log('🚀 Starting TypeScript Janus Client Example');
   console.log(`📍 Socket path: ${SOCKET_PATH}`);
 
   // Load API specification

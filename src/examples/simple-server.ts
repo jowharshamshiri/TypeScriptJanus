@@ -1,7 +1,7 @@
 #!/usr/bin/env ts-node
 
 /**
- * Simple server example for TypeScript Unix Socket API
+ * Simple server example for TypeScript Janus
  * Demonstrates basic server setup with command handlers
  */
 
@@ -37,7 +37,7 @@ function parseArgs() {
 const { socketPath: SOCKET_PATH } = parseArgs();
 
 async function main() {
-  console.log('🚀 Starting TypeScript Unix Socket API Server Example');
+  console.log('🚀 Starting TypeScript Janus Server Example');
   console.log(`📍 Socket path: ${SOCKET_PATH}`);
 
   // Create server
@@ -199,7 +199,7 @@ function setupCommandHandlers(server: JanusServer) {
       pong: true, 
       timestamp: new Date().toISOString(),
       serverInfo: {
-        name: 'TypeScript Unix Socket API Server',
+        name: 'TypeScript Janus Server',
         version: '1.0.0',
         uptime: process.uptime()
       }

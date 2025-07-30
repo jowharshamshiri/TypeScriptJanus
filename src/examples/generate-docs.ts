@@ -24,7 +24,7 @@ async function main() {
     // Create documentation generator
     const generator = new APIDocumentationGenerator(apiSpec, {
       title: apiSpec.name,
-      description: 'Comprehensive Unix Socket API with cross-platform support for Go, Rust, Swift, and TypeScript',
+      description: 'Comprehensive Janus with cross-platform support for Go, Rust, Swift, and TypeScript',
       version: apiSpec.version,
       includeExamples: true,
       includeTypes: true,
@@ -65,7 +65,7 @@ async function main() {
     // Create README for the generated docs
     const readme = `# ${apiSpec.name} Documentation
 
-This directory contains automatically generated documentation for the Unix Socket API.
+This directory contains automatically generated documentation for the Janus.
 
 ## Files
 

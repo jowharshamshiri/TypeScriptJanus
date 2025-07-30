@@ -1,5 +1,5 @@
 /**
- * Unix Socket Server for Unix Socket API Protocol
+ * Unix Socket Server for Janus Protocol
  * Implements command handling and response management
  */
 

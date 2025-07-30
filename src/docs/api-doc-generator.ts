@@ -1,6 +1,6 @@
 /**
  * Automatic API Documentation Generator
- * Creates Swagger/OpenAPI-style documentation from Unix Socket API specifications
+ * Creates Swagger/OpenAPI-style documentation from Janus specifications
  */
 
 import * as fs from 'fs/promises';
@@ -52,7 +52,7 @@ export class APIDocumentationGenerator {
     this.apiSpec = apiSpec;
     this.options = {
       title: options.title ?? apiSpec.name,
-      description: options.description ?? apiSpec.description ?? 'Unix Socket API Documentation',
+      description: options.description ?? apiSpec.description ?? 'Janus Documentation',
       version: options.version ?? apiSpec.version,
       includeExamples: options.includeExamples ?? true,
       includeTypes: options.includeTypes ?? true,
@@ -680,7 +680,7 @@ export class APIDocumentationGenerator {
    */
   generateCSS(): string {
     return `
-/* Unix Socket API Documentation Styles */
+/* Janus Documentation Styles */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -1007,7 +1007,7 @@ ${this.options.customStyles}
    */
   generateJavaScript(): string {
     return `
-// Unix Socket API Documentation JavaScript
+// Janus Documentation JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
     // Smooth scrolling for navigation links

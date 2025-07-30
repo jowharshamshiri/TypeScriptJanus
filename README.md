@@ -1,6 +1,6 @@
-# TypeScript Unix Socket API
+# TypeScript Janus
 
-TypeScript implementation of the Unix Socket API Protocol providing cross-platform inter-process communication with comprehensive security validation and async patterns.
+TypeScript implementation of the Janus Protocol providing cross-platform inter-process communication with comprehensive security validation and async patterns.
 
 ## Features
 
@@ -250,7 +250,7 @@ The TypeScript implementation is optimized for performance:
 
 ## Protocol Specification
 
-This implementation follows the comprehensive [Unix Socket API Protocol Specification](../PROTOCOL.md) ensuring compatibility with all other language implementations.
+This implementation follows the comprehensive [Janus Protocol Specification](../PROTOCOL.md) ensuring compatibility with all other language implementations.
 
 ## Contributing
 

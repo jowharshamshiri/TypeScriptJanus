@@ -1,5 +1,5 @@
 /**
- * TypeScript type definitions for Unix Socket API Protocol
+ * TypeScript type definitions for Janus Protocol
  * Based on the comprehensive protocol specification
  */
 
