@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import * as fs from 'fs';
 import * as unixDgram from 'unix-dgram';
 import { SocketCommand, SocketResponse } from '../types/protocol.js';
-import { JanusClient } from '../core/unix-datagram-client.js';
+import { JanusClient } from '../core/janus-client.js';
 
 const program = new Command();
 

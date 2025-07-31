@@ -5,10 +5,10 @@
 
 import { JanusClient, JanusClientError, JanusClientConfig } from '../protocol/janus-client';
 import { APISpecification, SocketResponse } from '../types/protocol';
-import { JanusClient } from '../core/unix-datagram-client';
+import { JanusClient as CoreJanusClient } from '../core/janus-client';
 
-// Mock the JanusClient
-jest.mock('../core/unix-datagram-client');
+// Mock the CoreJanusClient
+jest.mock('../core/janus-client');
 
 // Mock UUID
 jest.mock('uuid', () => ({
@@ -16,7 +16,7 @@ jest.mock('uuid', () => ({
 }));
 
 describe('JanusClient', () => {
-  let mockUnixClient: jest.Mocked<JanusClient>;
+  let mockCoreClient: jest.Mocked<CoreJanusClient>;
   let config: JanusClientConfig;
   let apiSpec: APISpecification;
   let mockUuid: jest.MockedFunction<typeof import('uuid').v4>;
@@ -28,15 +28,15 @@ describe('JanusClient', () => {
     // Setup UUID mock
     mockUuid = require('uuid').v4;
 
-    // Create mock implementation
-    mockUnixClient = {
+    // Create mock implementation for CoreJanusClient
+    mockCoreClient = {
       sendCommand: jest.fn(),
       sendCommandNoResponse: jest.fn(),
       testConnection: jest.fn()
     } as any;
 
-    // Mock constructor to return our mock
-    (JanusClient as jest.MockedClass<typeof JanusClient>).mockImplementation(() => mockUnixClient);
+    // Mock the CoreJanusClient constructor
+    (CoreJanusClient as jest.MockedClass<typeof CoreJanusClient>).mockImplementation(() => mockCoreClient);
 
     // Default configuration
     config = {
@@ -204,12 +204,12 @@ describe('JanusClient', () => {
 
       // Mock UUID generation
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       const result = await client.sendCommand('ping', { message: 'hello' });
 
       expect(result).toBe(mockResponse);
-      expect(mockUnixClient.sendCommand).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
         expect.objectContaining({
           id: 'test-id',
           channelId: 'test-channel',
@@ -229,11 +229,11 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       await client.sendCommand('ping', { message: 'test' }, 10.0);
 
-      expect(mockUnixClient.sendCommand).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
         expect.objectContaining({
           timeout: 10.0
         })
@@ -249,7 +249,7 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       await expect(client.sendCommand('ping', { message: 'test' })).rejects.toThrow(JanusClientError);
       await expect(client.sendCommand('ping', { message: 'test' })).rejects.toThrow('correlation mismatch');
@@ -264,7 +264,7 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       await expect(client.sendCommand('ping', { message: 'test' })).rejects.toThrow(JanusClientError);
       await expect(client.sendCommand('ping', { message: 'test' })).rejects.toThrow('Channel mismatch');
@@ -289,7 +289,7 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       // echo command has optional text argument
       await expect(client.sendCommand('echo')).resolves.toBe(mockResponse);
@@ -310,7 +310,7 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       // Should not throw even with unknown command
       await expect(clientNoValidation.sendCommand('unknown-command')).resolves.toBe(mockResponse);
@@ -325,11 +325,11 @@ describe('JanusClient', () => {
     });
 
     test('should send command without waiting for response', async () => {
-      mockUnixClient.sendCommandNoResponse.mockResolvedValue(undefined);
+      mockCoreClient.sendCommandNoResponse.mockResolvedValue(undefined);
 
       await client.sendCommandNoResponse('echo', { text: 'hello' });
 
-      expect(mockUnixClient.sendCommandNoResponse).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendCommandNoResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           channelId: 'test-channel',
           command: 'echo',
@@ -344,11 +344,11 @@ describe('JanusClient', () => {
     });
 
     test('should not include reply_to field', async () => {
-      mockUnixClient.sendCommandNoResponse.mockResolvedValue(undefined);
+      mockCoreClient.sendCommandNoResponse.mockResolvedValue(undefined);
 
       await client.sendCommandNoResponse('echo');
 
-      expect(mockUnixClient.sendCommandNoResponse).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendCommandNoResponse).toHaveBeenCalledWith(
         expect.not.objectContaining({
           reply_to: expect.anything()
         })
@@ -364,20 +364,20 @@ describe('JanusClient', () => {
     });
 
     test('should test connection successfully', async () => {
-      mockUnixClient.testConnection.mockResolvedValue(true);
+      mockCoreClient.testConnection.mockResolvedValue(true);
 
       await expect(client.testConnection()).resolves.toBeUndefined();
     });
 
     test('should throw on connection test failure', async () => {
-      mockUnixClient.testConnection.mockResolvedValue(false);
+      mockCoreClient.testConnection.mockResolvedValue(false);
 
       await expect(client.testConnection()).rejects.toThrow(JanusClientError);
       await expect(client.testConnection()).rejects.toThrow('Connection test failed');
     });
 
     test('should propagate underlying errors', async () => {
-      mockUnixClient.testConnection.mockRejectedValue(new Error('Connection error'));
+      mockCoreClient.testConnection.mockRejectedValue(new Error('Connection error'));
 
       await expect(client.testConnection()).rejects.toThrow('Connection error');
     });
@@ -399,7 +399,7 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       const result = await client.ping();
       expect(result).toBe(true);
@@ -414,14 +414,14 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       const result = await client.ping();
       expect(result).toBe(false);
     });
 
     test('should return false on ping error', async () => {
-      mockUnixClient.sendCommand.mockRejectedValue(new Error('Ping failed'));
+      mockCoreClient.sendCommand.mockRejectedValue(new Error('Ping failed'));
 
       const result = await client.ping();
       expect(result).toBe(false);
@@ -436,11 +436,11 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       await client.ping();
 
-      expect(mockUnixClient.sendCommand).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
         expect.objectContaining({
           command: 'ping',
           timeout: 10.0
@@ -501,12 +501,12 @@ describe('JanusClient', () => {
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockUnixClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
       await client.sendCommand('echo');
 
       // When no args provided, the args field should not be present in the object
-      expect(mockUnixClient.sendCommand).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
         expect.not.objectContaining({
           args: expect.anything()
         })

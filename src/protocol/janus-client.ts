@@ -4,7 +4,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { JanusClient } from '../core/unix-datagram-client';
+import { JanusClient as CoreJanusClient } from '../core/janus-client';
 import { 
   APISpecification, 
   SocketCommand, 
@@ -55,7 +55,7 @@ export class JanusClient {
   private readonly socketPath: string;
   private readonly channelId: string;
   private readonly apiSpec: APISpecification | undefined;
-  private readonly janusClient: JanusClient;
+  private readonly janusClient: CoreJanusClient;
   private readonly defaultTimeout: number;
   private readonly enableValidation: boolean;
 
@@ -74,7 +74,7 @@ export class JanusClient {
     this.enableValidation = config.enableValidation ?? true;
 
     // Create underlying datagram client
-    this.janusClient = new JanusClient({
+    this.janusClient = new CoreJanusClient({
       socketPath: config.socketPath,
       maxMessageSize: config.maxMessageSize ?? 65536,
       defaultTimeout: config.datagramTimeout ?? 5.0

@@ -3,7 +3,7 @@
  * Provides convenient interface for API specification based communication
  */
 
-import { JanusClient } from '../core/unix-datagram-client';
+import { JanusClient } from '../core/janus-client';
 import { APISpecification, ConnectionConfig, SocketCommand } from '../types/protocol';
 
 export class APIClientError extends Error {
