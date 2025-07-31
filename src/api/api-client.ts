@@ -3,7 +3,7 @@
  * Provides convenient interface for API specification based communication
  */
 
-import { UnixDatagramClient } from '../core/unix-datagram-client';
+import { JanusClient } from '../core/unix-datagram-client';
 import { APISpecification, ConnectionConfig, SocketCommand } from '../types/protocol';
 
 export class APIClientError extends Error {
@@ -25,7 +25,7 @@ export interface APIClientConfig extends ConnectionConfig {
 }
 
 export class APIClient {
-  private client: UnixDatagramClient;
+  private client: JanusClient;
   private config: APIClientConfig;
   private apiSpec: APISpecification | undefined;
 
@@ -43,7 +43,7 @@ export class APIClient {
     if (config.connectionTimeout !== undefined) clientConfig.connectionTimeout = config.connectionTimeout;
     if (config.maxPendingCommands !== undefined) clientConfig.maxPendingCommands = config.maxPendingCommands;
     
-    this.client = new UnixDatagramClient(clientConfig);
+    this.client = new JanusClient(clientConfig);
 
     // Setup event forwarding
     this.setupEventForwarding();
@@ -81,7 +81,7 @@ export class APIClient {
         command: commandName,
         ...(args && { args }),
         ...(timeout && { timeout }),
-        timestamp: new Date().toISOString()
+        timestamp: Date.now() / 1000
       };
       
       const response = await this.client.sendCommand(command);

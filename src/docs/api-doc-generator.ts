@@ -51,7 +51,7 @@ export class APIDocumentationGenerator {
   constructor(apiSpec: APISpecification, options: DocumentationOptions = {}) {
     this.apiSpec = apiSpec;
     this.options = {
-      title: options.title ?? apiSpec.name,
+      title: options.title ?? apiSpec.name ?? 'Janus API',
       description: options.description ?? apiSpec.description ?? 'Janus Documentation',
       version: options.version ?? apiSpec.version,
       includeExamples: options.includeExamples ?? true,
@@ -383,8 +383,8 @@ export class APIDocumentationGenerator {
                 ${command.args ? `
                 <h4>Arguments</h4>
                 <div class="arguments">
-                    ${Object.entries(command.args).map(([, arg]) => 
-                        this.generateArgumentDocumentation(arg.name, arg)
+                    ${Object.entries(command.args).map(([argName, arg]) => 
+                        this.generateArgumentDocumentation(arg.name ?? argName, arg)
                     ).join('')}
                 </div>
                 ` : ''}

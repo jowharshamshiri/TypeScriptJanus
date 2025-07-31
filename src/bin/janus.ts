@@ -2,9 +2,9 @@
 
 import { Command } from 'commander';
 import * as fs from 'fs';
-import * as dgram from 'dgram';
+import * as unixDgram from 'unix-dgram';
 import { SocketCommand, SocketResponse } from '../types/protocol.js';
-import { UnixDatagramClient } from '../core/unix-datagram-client.js';
+import { JanusClient } from '../core/unix-datagram-client.js';
 
 const program = new Command();
 
@@ -41,17 +41,17 @@ async function listenForDatagrams(socketPath: string): Promise<void> {
         // Ignore if doesn't exist
     }
     
-    // TODO: Use proper Unix domain socket - Node.js dgram doesn't support unix_dgram
-    const socket = dgram.createSocket('udp4');
+    // Create Unix domain datagram socket
+    const socket = unixDgram.createSocket('unix_dgram');
     
-    socket.on('message', (buffer: Buffer) => {
+    socket.on('message', async (buffer: Buffer) => {
         try {
             const cmd: SocketCommand = JSON.parse(buffer.toString());
             console.log(`Received datagram: ${cmd.command} (ID: ${cmd.id})`);
             
             // Send response via reply_to if specified
             if (cmd.reply_to) {
-                sendResponse(cmd.id, cmd.channelId, cmd.command, cmd.args, cmd.reply_to);
+                await sendResponse(cmd.id, cmd.channelId, cmd.command, cmd.args, cmd.reply_to);
             }
         } catch (error) {
             console.error('Failed to parse datagram:', error);
@@ -84,19 +84,25 @@ async function listenForDatagrams(socketPath: string): Promise<void> {
 async function sendDatagram(target: string, command: string, message: string): Promise<void> {
     console.log(`Sending SOCK_DGRAM to: ${target}`);
     
-    const client = new UnixDatagramClient({ socketPath: target });
+    const client = new JanusClient({ socketPath: target });
     
     // Create response socket path
     const responseSocket = `/tmp/typescript-response-${process.pid}.sock`;
     
+    // Prepare arguments based on command type (matching Go/Rust/Swift pattern)
+    let args: Record<string, any> = {};
+    if (['echo', 'get_info', 'validate', 'slow_process'].includes(command)) {
+        args.message = message;
+    }
+
     const cmd: SocketCommand = {
         id: generateId(),
         channelId: 'test',
         command,
         reply_to: responseSocket,
-        args: { message },
+        args,
         timeout: 5.0,
-        timestamp: new Date().toISOString()
+        timestamp: Date.now() / 1000
     };
     
     // const cmdData = Buffer.from(JSON.stringify(cmd)); // Not needed for direct sendCommand
@@ -110,13 +116,13 @@ async function sendDatagram(target: string, command: string, message: string): P
     }
 }
 
-function sendResponse(
+async function sendResponse(
     commandId: string,
     channelId: string,
     command: string,
     args: Record<string, any> | undefined,
     _replyTo: string
-): void {
+): Promise<void> {
     let result: Record<string, any> = {};
     let success = true;
     
@@ -135,6 +141,32 @@ function sendResponse(
             result.version = '1.0.0';
             result.protocol = 'SOCK_DGRAM';
             break;
+        case 'validate':
+            // JSON validation service
+            if (args?.message && typeof args.message === 'string') {
+                try {
+                    const jsonData = JSON.parse(args.message);
+                    result.valid = true;
+                    result.data = jsonData;
+                } catch (error) {
+                    result.valid = false;
+                    result.error = 'Invalid JSON format';
+                    result.reason = error instanceof Error ? error.message : String(error);
+                }
+            } else {
+                result.valid = false;
+                result.error = 'No message provided for validation';
+            }
+            break;
+        case 'slow_process':
+            // Simulate a slow process that might timeout
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+            result.processed = true;
+            result.delay = '2000ms';
+            if (args?.message) {
+                result.message = args.message;
+            }
+            break;
         default:
             success = false;
             result.error = `Unknown command: ${command}`;
@@ -149,15 +181,15 @@ function sendResponse(
             code: 'UNKNOWN_COMMAND',
             message: 'Unknown command'
         } }),
-        timestamp: new Date().toISOString()
+        timestamp: Date.now() / 1000
     };
     
     const responseData = Buffer.from(JSON.stringify(response));
     
     // Send response datagram to reply_to socket
-    const replySocket = dgram.createSocket('unix_dgram');
+    const replySocket = unixDgram.createSocket('unix_dgram');
     
-    replySocket.send(responseData, _replyTo, (error?: Error | null) => {
+    replySocket.send(responseData, 0, responseData.length, _replyTo, (error: Error | null) => {
         if (error) {
             console.error('Failed to send response:', error);
         }

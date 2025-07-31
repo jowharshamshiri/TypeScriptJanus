@@ -225,14 +225,22 @@ export class MessageFraming {
       throw new MessageFramingError('Command must be an object', 'INVALID_COMMAND_STRUCTURE');
     }
     
-    const requiredFields = ['id', 'channelId', 'command', 'timestamp'];
-    for (const field of requiredFields) {
+    const requiredStringFields = ['id', 'channelId', 'command'];
+    for (const field of requiredStringFields) {
       if (!(field in message) || typeof message[field] !== 'string') {
         throw new MessageFramingError(
           `Command missing required string field: ${field}`,
           'MISSING_COMMAND_FIELD'
         );
       }
+    }
+    
+    // Validate timestamp as number (Unix timestamp)
+    if (!('timestamp' in message) || typeof message.timestamp !== 'number') {
+      throw new MessageFramingError(
+        'Command missing required number field: timestamp',
+        'MISSING_COMMAND_FIELD'
+      );
     }
     
     if (message.args !== undefined && (typeof message.args !== 'object' || message.args === null)) {
@@ -263,7 +271,7 @@ export class MessageFraming {
     }
     
     if (typeof message.commandId !== 'string' || typeof message.channelId !== 'string' ||
-        typeof message.success !== 'boolean' || typeof message.timestamp !== 'string') {
+        typeof message.success !== 'boolean' || typeof message.timestamp !== 'number') {
       throw new MessageFramingError(
         'Response field types invalid',
         'INVALID_RESPONSE_FIELD_TYPES'

@@ -412,7 +412,7 @@ export class JanusServer extends EventEmitter {
         channelId: command.channelId,
         success: true,
         result: result as Record<string, any>,
-        timestamp: new Date().toISOString()
+        timestamp: Date.now() / 1000
       };
       
       await this.sendResponse(clientId, response);
@@ -452,7 +452,7 @@ export class JanusServer extends EventEmitter {
         message: errorMessage,
         ...(errorDetails && { details: errorDetails })
       },
-      timestamp: new Date().toISOString()
+      timestamp: Date.now() / 1000
     };
     
     try {

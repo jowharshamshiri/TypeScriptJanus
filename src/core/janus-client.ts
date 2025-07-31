@@ -3,7 +3,7 @@
  * Implements connectionless SOCK_DGRAM communication
  */
 
-import * as dgram from 'dgram';
+import * as unixDgram from 'unix-dgram';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -11,20 +11,20 @@ import { EventEmitter } from 'events';
 import { SocketCommand, SocketResponse, ConnectionConfig } from '../types/protocol';
 import { SecurityValidator } from './security-validator';
 
-export interface UnixDatagramClientEvents {
+export interface JanusClientEvents {
   'error': (error: Error) => void;
   'message': (message: SocketCommand | SocketResponse) => void;
   'response': (response: SocketResponse) => void;
 }
 
-export class UnixDatagramClientError extends Error {
+export class JanusClientError extends Error {
   constructor(message: string, public code: string, public details?: string) {
     super(message);
-    this.name = 'UnixDatagramClientError';
+    this.name = 'JanusClientError';
   }
 }
 
-export class UnixDatagramClient extends EventEmitter {
+export class JanusClient extends EventEmitter {
   private config: Required<ConnectionConfig>;
   private validator: SecurityValidator;
 
@@ -46,7 +46,7 @@ export class UnixDatagramClient extends EventEmitter {
     // Validate socket path
     const pathValidation = this.validator.validateSocketPath(this.config.socketPath);
     if (!pathValidation.valid) {
-      throw new UnixDatagramClientError(
+      throw new JanusClientError(
         'Invalid socket path',
         'INVALID_PATH',
         pathValidation.details
@@ -69,7 +69,7 @@ export class UnixDatagramClient extends EventEmitter {
   async sendCommand(command: Omit<SocketCommand, 'reply_to'>): Promise<SocketResponse> {
     return new Promise(async (resolve, reject) => {
       const responseSocketPath = this.generateResponseSocketPath();
-      let responseSocket: dgram.Socket | null = null;
+      let responseSocket: any = null;
       let timeoutHandle: NodeJS.Timeout;
 
       const cleanup = () => {
@@ -90,11 +90,11 @@ export class UnixDatagramClient extends EventEmitter {
       };
 
       try {
-        // Create response socket
-        responseSocket = dgram.createSocket('udp4') // TODO: Implement proper unix domain socket support;
+        // Create response socket for Unix domain datagram
+        responseSocket = unixDgram.createSocket('unix_dgram');
         
-        // Bind response socket
-        responseSocket.bind(8082); // TODO: Use proper unix domain socket path
+        // Bind response socket to Unix domain socket path
+        responseSocket.bind(responseSocketPath);
 
         // Set up response listener
         responseSocket.on('message', (data: Buffer) => {
@@ -104,7 +104,7 @@ export class UnixDatagramClient extends EventEmitter {
             resolve(response);
           } catch (err) {
             cleanup();
-            reject(new UnixDatagramClientError(
+            reject(new JanusClientError(
               'Failed to parse response',
               'PARSE_ERROR',
               err instanceof Error ? err.message : String(err)
@@ -112,9 +112,9 @@ export class UnixDatagramClient extends EventEmitter {
           }
         });
 
-        responseSocket.on('error', (err) => {
+        responseSocket.on('error', (err: Error) => {
           cleanup();
-          reject(new UnixDatagramClientError(
+          reject(new JanusClientError(
             'Response socket error',
             'RESPONSE_SOCKET_ERROR',
             err.message
@@ -125,7 +125,7 @@ export class UnixDatagramClient extends EventEmitter {
         const timeout = command.timeout || this.config.defaultTimeout;
         timeoutHandle = setTimeout(() => {
           cleanup();
-          reject(new UnixDatagramClientError(
+          reject(new JanusClientError(
             'Command timeout',
             'TIMEOUT',
             `Command ${command.id} timed out after ${timeout}s`
@@ -142,7 +142,7 @@ export class UnixDatagramClient extends EventEmitter {
         const commandData = Buffer.from(JSON.stringify(commandWithReplyTo));
         if (commandData.length > this.config.maxMessageSize) {
           cleanup();
-          reject(new UnixDatagramClientError(
+          reject(new JanusClientError(
             'Message too large',
             'MESSAGE_TOO_LARGE',
             `Message size ${commandData.length} exceeds limit ${this.config.maxMessageSize}`
@@ -150,23 +150,32 @@ export class UnixDatagramClient extends EventEmitter {
           return;
         }
 
-        // Send command datagram
-        const clientSocket = dgram.createSocket('udp4') // TODO: Implement proper unix domain socket support;
-        clientSocket.send(commandData, 8080, 'localhost', (err) => { // TODO: Use proper unix domain socket
+        // Send command datagram to Unix domain socket
+        const clientSocket = unixDgram.createSocket('unix_dgram');
+        clientSocket.send(commandData, 0, commandData.length, this.config.socketPath, (err: Error | null) => {
           clientSocket.close();
           if (err) {
             cleanup();
-            reject(new UnixDatagramClientError(
-              'Failed to send command',
-              'SEND_ERROR',
-              err.message
-            ));
+            // Dynamic error detection for message too large (matching Go/Rust/Swift pattern)
+            if (err.message && err.message.toLowerCase().includes('message too long')) {
+              reject(new JanusClientError(
+                'Message size exceeds socket buffer limits. Try reducing message size or splitting into smaller parts.',
+                'MESSAGE_TOO_LARGE',
+                `Underlying error: ${err.message}`
+              ));
+            } else {
+              reject(new JanusClientError(
+                'Failed to send command',
+                'SEND_ERROR',
+                err.message
+              ));
+            }
           }
         });
 
       } catch (err) {
         cleanup();
-        reject(new UnixDatagramClientError(
+        reject(new JanusClientError(
           'Failed to set up datagram communication',
           'SETUP_ERROR',
           err instanceof Error ? err.message : String(err)
@@ -184,7 +193,7 @@ export class UnixDatagramClient extends EventEmitter {
         // Validate command
         const commandData = Buffer.from(JSON.stringify(command));
         if (commandData.length > this.config.maxMessageSize) {
-          reject(new UnixDatagramClientError(
+          reject(new JanusClientError(
             'Message too large',
             'MESSAGE_TOO_LARGE',
             `Message size ${commandData.length} exceeds limit ${this.config.maxMessageSize}`
@@ -192,23 +201,32 @@ export class UnixDatagramClient extends EventEmitter {
           return;
         }
 
-        // Send command datagram
-        const clientSocket = dgram.createSocket('udp4') // TODO: Implement proper unix domain socket support;
-        clientSocket.send(commandData, 8080, 'localhost', (err) => { // TODO: Use proper unix domain socket
+        // Send command datagram to Unix domain socket
+        const clientSocket = unixDgram.createSocket('unix_dgram');
+        clientSocket.send(commandData, 0, commandData.length, this.config.socketPath, (err: Error | null) => {
           clientSocket.close();
           if (err) {
-            reject(new UnixDatagramClientError(
-              'Failed to send command',
-              'SEND_ERROR',
-              err.message
-            ));
+            // Dynamic error detection for message too large (matching Go/Rust/Swift pattern)
+            if (err.message && err.message.toLowerCase().includes('message too long')) {
+              reject(new JanusClientError(
+                'Message size exceeds socket buffer limits. Try reducing message size or splitting into smaller parts.',
+                'MESSAGE_TOO_LARGE',
+                `Underlying error: ${err.message}`
+              ));
+            } else {
+              reject(new JanusClientError(
+                'Failed to send command',
+                'SEND_ERROR',
+                err.message
+              ));
+            }
           } else {
             resolve();
           }
         });
 
       } catch (err) {
-        reject(new UnixDatagramClientError(
+        reject(new JanusClientError(
           'Failed to send command',
           'SEND_ERROR',
           err instanceof Error ? err.message : String(err)
@@ -223,11 +241,11 @@ export class UnixDatagramClient extends EventEmitter {
   async testConnection(): Promise<boolean> {
     try {
       // Try to create a client socket and connect to server
-      const testSocket = dgram.createSocket('udp4') // TODO: Implement proper unix domain socket support;
+      const testSocket = unixDgram.createSocket('unix_dgram');
       
       return new Promise((resolve) => {
         const testData = Buffer.from('test');
-        testSocket.send(testData, 8080, 'localhost', (err) => { // TODO: Use proper unix domain socket
+        testSocket.send(testData, 0, testData.length, this.config.socketPath, (err: Error | null) => {
           testSocket.close();
           resolve(!err);
         });

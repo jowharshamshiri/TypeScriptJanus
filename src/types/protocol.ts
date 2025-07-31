@@ -22,8 +22,8 @@ export interface SocketCommand {
   /** Timeout in seconds (0.1-300.0, default: 30.0) */
   timeout?: number;
   
-  /** ISO 8601 timestamp with millisecond precision */
-  timestamp: string;
+  /** Unix timestamp as number (matching Go/Rust/Swift) */
+  timestamp: number;
 }
 
 export interface SocketResponse {
@@ -42,8 +42,8 @@ export interface SocketResponse {
   /** Error information (if success=false) */
   error?: SocketError;
   
-  /** Response generation timestamp */
-  timestamp: string;
+  /** Response generation timestamp as Unix timestamp */
+  timestamp: number;
 }
 
 export interface SocketError {
@@ -130,7 +130,7 @@ export interface APISpecification {
   version: string;
   
   /** Human-readable name of the API */
-  name: string;
+  name?: string;
   
   /** Detailed description of the API */
   description?: string;
@@ -144,7 +144,7 @@ export interface APISpecification {
 
 export interface Channel {
   /** Human-readable channel name */
-  name: string;
+  name?: string;
   
   /** Detailed description of the channel */
   description?: string;
@@ -155,7 +155,7 @@ export interface Channel {
 
 export interface Command {
   /** Human-readable command name */
-  name: string;
+  name?: string;
   
   /** Detailed description of the command */
   description: string;
@@ -175,7 +175,7 @@ export interface Command {
 
 export interface Argument {
   /** Human-readable argument name */
-  name: string;
+  name?: string;
   
   /** Data type of the argument */
   type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';

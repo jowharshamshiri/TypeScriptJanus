@@ -10,7 +10,7 @@ describe('MessageFraming', () => {
     id: '550e8400-e29b-41d4-a716-446655440000',
     channelId: 'test-service',
     command: 'ping',
-    timestamp: '2025-07-29T10:50:00.000Z'
+    timestamp: 1722248200
   };
 
   const sampleResponse: SocketResponse = {
@@ -18,7 +18,7 @@ describe('MessageFraming', () => {
     channelId: 'test-service',
     success: true,
     result: { pong: true },
-    timestamp: '2025-07-29T10:50:01.000Z'
+    timestamp: 1722248201
   };
 
   describe('encodeMessage', () => {

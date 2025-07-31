@@ -23,7 +23,7 @@ async function main() {
 
     // Create documentation generator
     const generator = new APIDocumentationGenerator(apiSpec, {
-      title: apiSpec.name,
+      title: apiSpec.name ?? 'Janus API',
       description: 'Comprehensive Janus with cross-platform support for Go, Rust, Swift, and TypeScript',
       version: apiSpec.version,
       includeExamples: true,
