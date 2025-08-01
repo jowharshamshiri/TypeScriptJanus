@@ -48,7 +48,7 @@ describe('JanusClient', () => {
       enableValidation: true
     };
 
-    // Default API specification
+    // Default API specification - using non-reserved commands for testing
     apiSpec = {
       version: '1.0.0',
       name: 'Test API',
@@ -56,9 +56,9 @@ describe('JanusClient', () => {
         'test-channel': {
           name: 'Test Channel',
           commands: {
-            'ping': {
-              name: 'Ping',
-              description: 'Test ping command',
+            'custom_ping': {
+              name: 'Custom Ping',
+              description: 'Test custom ping command',
               args: {
                 'message': {
                   name: 'Message',
@@ -68,9 +68,9 @@ describe('JanusClient', () => {
                 }
               }
             },
-            'echo': {
-              name: 'Echo',
-              description: 'Echo command',
+            'custom_echo': {
+              name: 'Custom Echo',
+              description: 'Custom echo command',
               args: {
                 'text': {
                   name: 'Text',
@@ -87,8 +87,8 @@ describe('JanusClient', () => {
   });
 
   describe('Constructor', () => {
-    test('should create instance with valid configuration', () => {
-      const client = new JanusClient(config);
+    test('should create instance with valid configuration', async () => {
+      const client = await JanusClient.create(config);
       
       expect(client).toBeDefined();
       expect(client.channelIdValue).toBe('test-channel');
@@ -96,101 +96,66 @@ describe('JanusClient', () => {
       expect(client.apiSpecification).toBeUndefined();
     });
 
-    test('should create instance with API specification', () => {
-      const configWithSpec = { ...config, apiSpec };
-      const client = new JanusClient(configWithSpec);
-      
-      expect(client.apiSpecification).toBe(apiSpec);
-    });
-
-    test('should use default values for optional parameters', () => {
+    test('should use default values for optional parameters', async () => {
       const minimalConfig = {
         socketPath: '/tmp/test.sock',
         channelId: 'test-channel'
       };
       
-      const client = new JanusClient(minimalConfig);
+      const client = await JanusClient.create(minimalConfig);
       expect(client).toBeDefined();
     });
 
-    test('should throw on empty socket path', () => {
+    test('should throw on empty socket path', async () => {
       const invalidConfig = { ...config, socketPath: '' };
       
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
-      expect(() => new JanusClient(invalidConfig)).toThrow('Socket path cannot be empty');
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow(JanusClientError);
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow('Socket path cannot be empty');
     });
 
-    test('should throw on null byte in socket path', () => {
+    test('should throw on null byte in socket path', async () => {
       const invalidConfig = { ...config, socketPath: '/tmp/test\0.sock' };
       
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
-      expect(() => new JanusClient(invalidConfig)).toThrow('null byte');
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow(JanusClientError);
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow('null byte');
     });
 
-    test('should throw on path traversal in socket path', () => {
+    test('should throw on path traversal in socket path', async () => {
       const invalidConfig = { ...config, socketPath: '/tmp/../etc/passwd' };
       
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
-      expect(() => new JanusClient(invalidConfig)).toThrow('path traversal');
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow(JanusClientError);
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow('path traversal');
     });
 
-    test('should throw on empty channel ID', () => {
+    test('should throw on empty channel ID', async () => {
       const invalidConfig = { ...config, channelId: '' };
       
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
-      expect(() => new JanusClient(invalidConfig)).toThrow('Channel ID cannot be empty');
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow(JanusClientError);
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow('Channel ID cannot be empty');
     });
 
-    test('should throw on forbidden characters in channel ID', () => {
+    test('should throw on forbidden characters in channel ID', async () => {
       const invalidConfig = { ...config, channelId: 'test;channel' };
       
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
-      expect(() => new JanusClient(invalidConfig)).toThrow('forbidden characters');
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow(JanusClientError);
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow('forbidden characters');
     });
 
-    test('should throw on path characters in channel ID', () => {
+    test('should throw on path characters in channel ID', async () => {
       const invalidConfig = { ...config, channelId: '../test-channel' };
       
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
-      expect(() => new JanusClient(invalidConfig)).toThrow('invalid path characters');
-    });
-
-    test('should throw on invalid API specification', () => {
-      const invalidSpec: APISpecification = {
-        version: '1.0.0',
-        channels: {}
-      };
-      const invalidConfig = { ...config, apiSpec: invalidSpec };
-      
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
-      expect(() => new JanusClient(invalidConfig)).toThrow('at least one channel');
-    });
-
-    test('should throw on missing channel in API specification', () => {
-      const invalidSpec: APISpecification = {
-        version: '1.0.0',
-        channels: {
-          'other-channel': {
-            commands: {
-              'test': {
-                description: 'Test command'
-              }
-            }
-          }
-        }
-      };
-      const invalidConfig = { ...config, apiSpec: invalidSpec };
-      
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
-      expect(() => new JanusClient(invalidConfig)).toThrow('not found in API specification');
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow(JanusClientError);
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow('invalid path characters');
     });
   });
 
   describe('sendCommand', () => {
     let client: JanusClient;
 
-    beforeEach(() => {
-      client = new JanusClient({ ...config, apiSpec });
+    beforeEach(async () => {
+      client = await JanusClient.create(config);
+      // Mock the API spec for validation tests
+      (client as any).apiSpec = apiSpec;
     });
 
     test('should send command and return response', async () => {
@@ -206,14 +171,14 @@ describe('JanusClient', () => {
       mockUuid.mockReturnValue('test-id');
       mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
-      const result = await client.sendCommand('ping', { message: 'hello' });
+      const result = await client.sendCommand('custom_ping', { message: 'hello' });
 
       expect(result).toBe(mockResponse);
       expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
         expect.objectContaining({
           id: 'test-id',
           channelId: 'test-channel',
-          command: 'ping',
+          command: 'custom_ping',
           args: { message: 'hello' },
           timeout: 30.0
         })
@@ -231,7 +196,7 @@ describe('JanusClient', () => {
       mockUuid.mockReturnValue('test-id');
       mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
-      await client.sendCommand('ping', { message: 'test' }, 10.0);
+      await client.sendCommand('custom_ping', { message: 'test' }, 10.0);
 
       expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -251,8 +216,8 @@ describe('JanusClient', () => {
       mockUuid.mockReturnValue('test-id');
       mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
-      await expect(client.sendCommand('ping', { message: 'test' })).rejects.toThrow(JanusClientError);
-      await expect(client.sendCommand('ping', { message: 'test' })).rejects.toThrow('correlation mismatch');
+      await expect(client.sendCommand('custom_ping', { message: 'test' })).rejects.toThrow(JanusClientError);
+      await expect(client.sendCommand('custom_ping', { message: 'test' })).rejects.toThrow('correlation mismatch');
     });
 
     test('should throw on channel ID mismatch', async () => {
@@ -266,8 +231,8 @@ describe('JanusClient', () => {
       mockUuid.mockReturnValue('test-id');
       mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
-      await expect(client.sendCommand('ping', { message: 'test' })).rejects.toThrow(JanusClientError);
-      await expect(client.sendCommand('ping', { message: 'test' })).rejects.toThrow('Channel mismatch');
+      await expect(client.sendCommand('custom_ping', { message: 'test' })).rejects.toThrow(JanusClientError);
+      await expect(client.sendCommand('custom_ping', { message: 'test' })).rejects.toThrow('Channel mismatch');
     });
 
     test('should validate command against API specification', async () => {
@@ -276,8 +241,8 @@ describe('JanusClient', () => {
     });
 
     test('should validate required arguments', async () => {
-      await expect(client.sendCommand('ping')).rejects.toThrow(JanusClientError);
-      await expect(client.sendCommand('ping')).rejects.toThrow('Missing required argument');
+      await expect(client.sendCommand('custom_ping')).rejects.toThrow(JanusClientError);
+      await expect(client.sendCommand('custom_ping')).rejects.toThrow('Missing required argument');
     });
 
     test('should allow optional arguments to be missing', async () => {
@@ -291,14 +256,13 @@ describe('JanusClient', () => {
       mockUuid.mockReturnValue('test-id');
       mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
-      // echo command has optional text argument
-      await expect(client.sendCommand('echo')).resolves.toBe(mockResponse);
+      // custom_echo command has optional text argument
+      await expect(client.sendCommand('custom_echo')).resolves.toBe(mockResponse);
     });
 
     test('should skip validation when disabled', async () => {
-      const clientNoValidation = new JanusClient({ 
+      const clientNoValidation = await JanusClient.create({ 
         ...config, 
-        apiSpec, 
         enableValidation: false 
       });
 
@@ -320,19 +284,21 @@ describe('JanusClient', () => {
   describe('sendCommandNoResponse', () => {
     let client: JanusClient;
 
-    beforeEach(() => {
-      client = new JanusClient({ ...config, apiSpec });
+    beforeEach(async () => {
+      client = await JanusClient.create(config);
+      // Mock the API spec for validation tests
+      (client as any).apiSpec = apiSpec;
     });
 
     test('should send command without waiting for response', async () => {
       mockCoreClient.sendCommandNoResponse.mockResolvedValue(undefined);
 
-      await client.sendCommandNoResponse('echo', { text: 'hello' });
+      await client.sendCommandNoResponse('custom_echo', { text: 'hello' });
 
       expect(mockCoreClient.sendCommandNoResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           channelId: 'test-channel',
-          command: 'echo',
+          command: 'custom_echo',
           args: { text: 'hello' }
         })
       );
@@ -346,7 +312,7 @@ describe('JanusClient', () => {
     test('should not include reply_to field', async () => {
       mockCoreClient.sendCommandNoResponse.mockResolvedValue(undefined);
 
-      await client.sendCommandNoResponse('echo');
+      await client.sendCommandNoResponse('custom_echo');
 
       expect(mockCoreClient.sendCommandNoResponse).toHaveBeenCalledWith(
         expect.not.objectContaining({
@@ -359,8 +325,8 @@ describe('JanusClient', () => {
   describe('testConnection', () => {
     let client: JanusClient;
 
-    beforeEach(() => {
-      client = new JanusClient(config);
+    beforeEach(async () => {
+      client = await JanusClient.create(config);
     });
 
     test('should test connection successfully', async () => {
@@ -386,8 +352,8 @@ describe('JanusClient', () => {
   describe('ping', () => {
     let client: JanusClient;
 
-    beforeEach(() => {
-      client = new JanusClient(config);
+    beforeEach(async () => {
+      client = await JanusClient.create(config);
     });
 
     test('should return true on successful ping', async () => {
@@ -450,25 +416,26 @@ describe('JanusClient', () => {
   });
 
   describe('Public Properties', () => {
-    test('should expose channel ID', () => {
-      const client = new JanusClient(config);
+    test('should expose channel ID', async () => {
+      const client = await JanusClient.create(config);
       expect(client.channelIdValue).toBe('test-channel');
     });
 
-    test('should expose socket path', () => {
-      const client = new JanusClient(config);
+    test('should expose socket path', async () => {
+      const client = await JanusClient.create(config);
       expect(client.socketPathValue).toBe('/tmp/test.sock');
     });
 
-    test('should expose API specification', () => {
-      const configWithSpec = { ...config, apiSpec };
-      const client = new JanusClient(configWithSpec);
-      expect(client.apiSpecification).toBe(apiSpec);
+    test('should return undefined for API specification initially', async () => {
+      const client = await JanusClient.create(config);
+      expect(client.apiSpecification).toBeUndefined();
     });
 
-    test('should return undefined for API specification when not provided', () => {
-      const client = new JanusClient(config);
-      expect(client.apiSpecification).toBeUndefined();
+    test('should expose API specification after it is loaded', async () => {
+      const client = await JanusClient.create(config);
+      // Mock the API spec loading
+      (client as any).apiSpec = apiSpec;
+      expect(client.apiSpecification).toBe(apiSpec);
     });
   });
 
@@ -492,7 +459,7 @@ describe('JanusClient', () => {
 
   describe('Edge Cases', () => {
     test('should handle undefined args in sendCommand', async () => {
-      const client = new JanusClient({ ...config, apiSpec, enableValidation: false });
+      const client = await JanusClient.create({ ...config, enableValidation: false });
       const mockResponse: SocketResponse = {
         commandId: 'test-id',
         channelId: 'test-channel',
@@ -503,7 +470,7 @@ describe('JanusClient', () => {
       mockUuid.mockReturnValue('test-id');
       mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
 
-      await client.sendCommand('echo');
+      await client.sendCommand('custom_echo');
 
       // When no args provided, the args field should not be present in the object
       expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
@@ -513,16 +480,16 @@ describe('JanusClient', () => {
       );
     });
 
-    test('should handle whitespace in socket path validation', () => {
+    test('should handle whitespace in socket path validation', async () => {
       const invalidConfig = { ...config, socketPath: '   ' };
       
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow(JanusClientError);
     });
 
-    test('should handle whitespace in channel ID validation', () => {
+    test('should handle whitespace in channel ID validation', async () => {
       const invalidConfig = { ...config, channelId: '   ' };
       
-      expect(() => new JanusClient(invalidConfig)).toThrow(JanusClientError);
+      await expect(JanusClient.create(invalidConfig)).rejects.toThrow(JanusClientError);
     });
   });
 });

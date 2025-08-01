@@ -216,6 +216,15 @@ export class APISpecificationParser {
       );
     }
 
+    // Check for reserved command names (matching Go/Rust/Swift)
+    const reservedCommands = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'spec'];
+    if (reservedCommands.includes(commandName)) {
+      throw new APISpecificationError(
+        `Command '${commandName}' is reserved and cannot be defined in API specification`,
+        `Reserved commands: ${reservedCommands.join(', ')}`
+      );
+    }
+
     if (!command.description || command.description.trim() === '') {
       throw new APISpecificationError(
         `Command '${commandName}' in channel '${channelId}' must have a description`,

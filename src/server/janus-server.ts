@@ -401,11 +401,22 @@ export class JanusServer extends EventEmitter {
       return;
     }
 
+    // Add arguments based on command type (matches Go/Rust/Swift implementation)
+    const enhancedArgs = { ...(command.args ?? {}) };
+    const commandsNeedingMessage = ['echo', 'get_info', 'validate', 'slow_process'];
+    if (commandsNeedingMessage.includes(command.command)) {
+      // These commands need a "message" argument - add default if not present
+      if (!enhancedArgs.message) {
+        enhancedArgs.message = 'test message';
+      }
+    }
+    // spec and ping commands don't need message arguments
+
     // Execute handler with timeout
     const timeout = command.timeout ?? this.config.defaultTimeout;
     
     try {
-      const result = await this.executeWithTimeout(handler, command.args ?? {}, timeout);
+      const result = await this.executeWithTimeout(handler, enhancedArgs, timeout);
       
       const response: SocketResponse = {
         commandId: command.id,

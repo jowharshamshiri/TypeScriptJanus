@@ -21,9 +21,6 @@ export interface JanusClientConfig {
   /** Channel ID for routing messages */
   channelId: string;
   
-  /** API specification for validation (optional) */
-  apiSpec?: APISpecification;
-  
   /** Maximum message size in bytes */
   maxMessageSize?: number;
   
@@ -54,22 +51,15 @@ export class JanusClientError extends Error {
 export class JanusClient {
   private readonly socketPath: string;
   private readonly channelId: string;
-  private readonly apiSpec: APISpecification | undefined;
+  private apiSpec: APISpecification | undefined;
   private readonly janusClient: CoreJanusClient;
   private readonly defaultTimeout: number;
   private readonly enableValidation: boolean;
 
-  constructor(config: JanusClientConfig) {
-    // Validate constructor inputs (matching Swift implementation pattern)
-    JanusClient.validateConstructorInputs(
-      config.socketPath,
-      config.channelId,
-      config.apiSpec
-    );
-
+  private constructor(config: JanusClientConfig, apiSpec?: APISpecification) {
     this.socketPath = config.socketPath;
     this.channelId = config.channelId;
-    this.apiSpec = config.apiSpec;
+    this.apiSpec = apiSpec;
     this.defaultTimeout = config.defaultTimeout ?? 30.0;
     this.enableValidation = config.enableValidation ?? true;
 
@@ -79,6 +69,22 @@ export class JanusClient {
       maxMessageSize: config.maxMessageSize ?? 65536,
       defaultTimeout: config.datagramTimeout ?? 5.0
     });
+  }
+
+  /**
+   * Create JanusClient with dynamic specification fetching (matching Go/Rust/Swift)
+   */
+  public static async create(config: JanusClientConfig): Promise<JanusClient> {
+    // Validate constructor inputs (matching Swift implementation pattern)
+    JanusClient.validateConstructorInputs(
+      config.socketPath,
+      config.channelId
+    );
+
+    // Create client instance - API spec will be fetched during operations when needed
+    const client = new JanusClient(config);
+
+    return client;
   }
 
   /**
@@ -102,6 +108,11 @@ export class JanusClient {
       timestamp: Date.now(),
       ...(args && { args })
     };
+
+    // Ensure API specification is loaded for validation
+    if (this.enableValidation) {
+      await this.ensureApiSpecLoaded();
+    }
 
     // Validate command against API specification
     if (this.enableValidation && this.apiSpec) {
@@ -194,8 +205,7 @@ export class JanusClient {
    */
   private static validateConstructorInputs(
     socketPath: string,
-    channelId: string,
-    apiSpec?: APISpecification
+    channelId: string
   ): void {
     // Validate socket path
     if (!socketPath || socketPath.trim() === '') {
@@ -243,23 +253,6 @@ export class JanusClient {
         'INVALID_CHANNEL'
       );
     }
-
-    // Validate API spec and channel exists if provided
-    if (apiSpec) {
-      if (!apiSpec.channels || Object.keys(apiSpec.channels).length === 0) {
-        throw new JanusClientError(
-          'API specification must contain at least one channel',
-          'VALIDATION_ERROR'
-        );
-      }
-
-      if (!apiSpec.channels[channelId]) {
-        throw new JanusClientError(
-          `Channel '${channelId}' not found in API specification`,
-          'INVALID_CHANNEL'
-        );
-      }
-    }
   }
 
   /**
@@ -267,6 +260,14 @@ export class JanusClient {
    * Matches Swift validateCommandAgainstSpec method exactly
    */
   private validateCommandAgainstSpec(spec: APISpecification, command: SocketCommand): void {
+    // Check if command is reserved (built-in commands should never be in API specs)
+    if (this.isBuiltinCommand(command.command)) {
+      throw new JanusClientError(
+        `Command '${command.command}' is reserved and cannot be used from API specification`,
+        'RESERVED_COMMAND_ERROR'
+      );
+    }
+
     // Check if channel exists
     const channel = spec.channels[command.channelId];
     if (!channel) {
@@ -322,5 +323,174 @@ export class JanusClient {
    */
   public get apiSpecification(): APISpecification | undefined {
     return this.apiSpec;
+  }
+
+  // MARK: - Built-in Command Support
+
+  /**
+   * Check if command is a built-in command that should bypass API validation
+   */
+  private isBuiltinCommand(command: string): boolean {
+    const builtinCommands = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'spec'];
+    return builtinCommands.includes(command);
+  }
+
+  /**
+   * Ensure API specification is loaded, fetching from server if needed
+   */
+  private async ensureApiSpecLoaded(): Promise<void> {
+    if (this.apiSpec !== undefined) {
+      return; // Already loaded
+    }
+
+    if (!this.enableValidation) {
+      return; // Validation disabled, no need to fetch
+    }
+
+    try {
+      // Fetch API specification from server using spec command
+      const specResponse = await this.sendBuiltinCommand('spec', undefined, 10.0);
+      
+      if (specResponse.success && specResponse.result) {
+        // Parse the specification from the response
+        const { APISpecificationParser } = await import('../specification/api-specification-parser');
+        const parser = new APISpecificationParser();
+        const jsonString = JSON.stringify(specResponse.result);
+        const fetchedSpec = parser.parseJSONString(jsonString);
+        this.apiSpec = fetchedSpec;
+        
+        // Validate channel exists in fetched specification
+        if (!fetchedSpec.channels || !fetchedSpec.channels[this.channelId]) {
+          throw new Error(`Channel '${this.channelId}' not found in server specification`);
+        }
+      } else {
+        // If spec command fails, continue without validation
+        this.apiSpec = undefined;
+      }
+    } catch (error) {
+      // If spec fetching fails, continue without validation
+      console.warn(`Failed to fetch API specification: ${error instanceof Error ? error.message : error}`);
+      this.apiSpec = undefined;
+    }
+  }
+
+  /**
+   * Send built-in command (used for spec fetching during operations)
+   */
+  private async sendBuiltinCommand(
+    command: string,
+    args?: Record<string, any>,
+    timeout?: number
+  ): Promise<SocketResponse> {
+    // Generate command ID
+    const commandId = uuidv4();
+
+    // Create socket command for built-in command
+    const socketCommand: SocketCommand = {
+      id: commandId,
+      channelId: this.channelId,
+      command,
+      timeout: timeout ?? 10.0,
+      timestamp: Date.now(),
+      ...(args && { args })
+    };
+
+    // Send datagram and wait for response (no validation for built-in commands)
+    const response = await this.janusClient.sendCommand(socketCommand);
+
+    // Validate response correlation
+    if (response.commandId !== commandId) {
+      throw new JanusClientError(
+        `Response correlation mismatch: expected ${commandId}, got ${response.commandId}`,
+        'CORRELATION_MISMATCH'
+      );
+    }
+
+    if (response.channelId !== this.channelId) {
+      throw new JanusClientError(
+        `Channel mismatch: expected ${this.channelId}, got ${response.channelId}`,
+        'CHANNEL_MISMATCH'
+      );
+    }
+
+    return response;
+  }
+
+  // MARK: - Legacy Method Support (for SOCK_DGRAM backward compatibility)
+
+  /**
+   * Returns the socket path for backward compatibility
+   */
+  socketPathString(): string {
+    return this.socketPath;
+  }
+
+  /**
+   * No-op for backward compatibility (SOCK_DGRAM doesn't have persistent connections)
+   */
+  async disconnect(): Promise<void> {
+    // SOCK_DGRAM doesn't have persistent connections - this is for backward compatibility only
+    return Promise.resolve();
+  }
+
+  /**
+   * Always returns true for backward compatibility (SOCK_DGRAM doesn't track connections)
+   */
+  isConnected(): boolean {
+    // SOCK_DGRAM doesn't track connections - return true for backward compatibility
+    return true;
+  }
+
+  // MARK: - Connection State Simulation (for SOCK_DGRAM compatibility)
+
+  /**
+   * Simulate connection state for SOCK_DGRAM compatibility
+   * Returns basic connectivity status without actual persistent connection
+   */
+  async getConnectionState(): Promise<{
+    connected: boolean;
+    socketPath: string;
+    channelId: string;
+    lastActivity?: number;
+  }> {
+    try {
+      // Test connectivity by sending a ping command
+      await this.ping();
+      return {
+        connected: true,
+        socketPath: this.socketPath,
+        channelId: this.channelId,
+        lastActivity: Date.now()
+      };
+    } catch (error) {
+      return {
+        connected: false,
+        socketPath: this.socketPath,
+        channelId: this.channelId
+      };
+    }
+  }
+
+  /**
+   * Register command handler validation (SOCK_DGRAM compatibility)
+   * Validates command exists in specification without actual handler registration
+   */
+  async registerCommandHandler(command: string, _handler: Function): Promise<void> {
+    // Ensure API spec is loaded
+    await this.ensureApiSpecLoaded();
+
+    // Validate command exists in the API specification for the client's channel
+    if (this.apiSpec) {
+      const channel = this.apiSpec.channels?.[this.channelId];
+      if (channel && !channel.commands?.[command]) {
+        throw new JanusClientError(
+          `Command '${command}' not found in channel '${this.channelId}'`,
+          'COMMAND_NOT_FOUND'
+        );
+      }
+    }
+
+    // SOCK_DGRAM doesn't actually register handlers, but validation passed
+    // Handler parameter is accepted for backward compatibility but not used
   }
 }

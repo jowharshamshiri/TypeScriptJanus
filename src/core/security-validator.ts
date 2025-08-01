@@ -12,6 +12,13 @@ export interface ValidationResult {
   details?: string;
 }
 
+export interface ResourceLimits {
+  maxActiveConnections: number;
+  maxCommandHandlers: number;
+  maxPendingRequests: number;
+  maxMemoryUsage: number;
+}
+
 export class SecurityValidator {
   private config: Required<SecurityConfig>;
 
@@ -464,5 +471,191 @@ export class SecurityValidator {
 
     // Overall message content validation
     return this.validateMessageContent(response);
+  }
+
+  /**
+   * Validate resource usage against limits
+   */
+  validateResourceUsage(
+    activeConnections: number,
+    commandHandlers: number,
+    pendingRequests: number,
+    memoryUsage: number,
+    limits: ResourceLimits = {
+      maxActiveConnections: 100,
+      maxCommandHandlers: 50,
+      maxPendingRequests: 200,
+      maxMemoryUsage: 100 * 1024 * 1024 // 100MB
+    }
+  ): ValidationResult {
+    if (activeConnections > limits.maxActiveConnections) {
+      return {
+        valid: false,
+        error: 'Active connections exceed limit',
+        code: 'CONNECTION_LIMIT_EXCEEDED',
+        details: `Active connections (${activeConnections}) exceed limit (${limits.maxActiveConnections})`
+      };
+    }
+
+    if (commandHandlers > limits.maxCommandHandlers) {
+      return {
+        valid: false,
+        error: 'Command handlers exceed limit',
+        code: 'HANDLER_LIMIT_EXCEEDED',
+        details: `Command handlers (${commandHandlers}) exceed limit (${limits.maxCommandHandlers})`
+      };
+    }
+
+    if (pendingRequests > limits.maxPendingRequests) {
+      return {
+        valid: false,
+        error: 'Pending requests exceed limit',
+        code: 'REQUEST_LIMIT_EXCEEDED',
+        details: `Pending requests (${pendingRequests}) exceed limit (${limits.maxPendingRequests})`
+      };
+    }
+
+    if (memoryUsage > limits.maxMemoryUsage) {
+      return {
+        valid: false,
+        error: 'Memory usage exceeds limit',
+        code: 'MEMORY_LIMIT_EXCEEDED',
+        details: `Memory usage (${memoryUsage} bytes) exceeds limit (${limits.maxMemoryUsage} bytes)`
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate channel isolation rules
+   */
+  validateChannelIsolation(requestedChannel: string, allowedChannels: Set<string>): ValidationResult {
+    if (!allowedChannels.has(requestedChannel)) {
+      return {
+        valid: false,
+        error: 'Access denied to channel',
+        code: 'CHANNEL_ISOLATION_VIOLATION',
+        details: `Access denied to channel '${requestedChannel}' - channel isolation violation`
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Check for reserved channel names
+   */
+  validateReservedChannels(channelId: string): ValidationResult {
+    const reservedChannels = new Set(['system', 'admin', 'root', 'internal', '__proto__', 'constructor']);
+    
+    if (reservedChannels.has(channelId.toLowerCase())) {
+      return {
+        valid: false,
+        error: 'Channel ID is reserved',
+        code: 'RESERVED_CHANNEL',
+        details: `Channel ID '${channelId}' is reserved and cannot be used`
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate reserved channel names (matches Swift implementation)
+   */
+  static validateReservedChannels(channelId: string): ValidationResult {
+    const reservedChannels = new Set([
+      'system', 'admin', 'root', 'internal', '__proto__', 'constructor'
+    ]);
+
+    if (reservedChannels.has(channelId.toLowerCase())) {
+      return {
+        valid: false,
+        error: `Channel ID '${channelId}' is reserved and cannot be used`
+      };
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate dangerous command patterns (matches Swift implementation)
+   */
+  static validateDangerousCommand(commandName: string): ValidationResult {
+    const dangerousPatterns = ['eval', 'exec', 'system', 'shell', 'rm', 'delete', 'drop'];
+    const lowerCommand = commandName.toLowerCase();
+
+    for (const pattern of dangerousPatterns) {
+      if (lowerCommand.includes(pattern)) {
+        return {
+          valid: false,
+          error: `Command name contains dangerous pattern: ${pattern}`
+        };
+      }
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate argument security (matches Swift implementation)
+   */
+  static validateArgumentSecurity(args: Record<string, any>): ValidationResult {
+    const dangerousArgs = new Set([
+      '__proto__', 'constructor', 'prototype', 'eval', 'function'
+    ]);
+
+    for (const argName of Object.keys(args)) {
+      if (dangerousArgs.has(argName.toLowerCase())) {
+        return {
+          valid: false,
+          error: `Dangerous argument name: ${argName}`
+        };
+      }
+    }
+
+    // Validate argument values for injection attempts
+    for (const [key, value] of Object.entries(args)) {
+      const valueValidation = this.validateArgumentValue(key, value);
+      if (!valueValidation.valid) {
+        return valueValidation;
+      }
+    }
+
+    return { valid: true };
+  }
+
+  /**
+   * Validate argument value for SQL and script injection patterns (matches Swift implementation)
+   */
+  private static validateArgumentValue(key: string, value: any): ValidationResult {
+    if (typeof value === 'string') {
+      const lowerValue = value.toLowerCase();
+
+      // Check for SQL injection patterns
+      const sqlPatterns = ["'", '"', '--', '/*', '*/', 'union', 'select', 'drop', 'delete', 'insert', 'update'];
+      for (const pattern of sqlPatterns) {
+        if (lowerValue.includes(pattern)) {
+          return {
+            valid: false,
+            error: `Argument '${key}' contains potentially dangerous SQL pattern: ${pattern}`
+          };
+        }
+      }
+
+      // Check for script injection patterns
+      const scriptPatterns = ['<script', 'javascript:', 'vbscript:', 'onload=', 'onerror='];
+      for (const pattern of scriptPatterns) {
+        if (lowerValue.includes(pattern)) {
+          return {
+            valid: false,
+            error: `Argument '${key}' contains script injection pattern: ${pattern}`
+          };
+        }
+      }
+    }
+
+    return { valid: true };
   }
 }
