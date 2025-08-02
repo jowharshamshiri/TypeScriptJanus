@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
 import { SocketCommand, SocketResponse, ConnectionConfig } from '../types/protocol';
 import { SecurityValidator } from './security-validator';
+import { SocketBufferManager, BufferLimits, withBufferManagement } from './socket-buffer-manager';
 
 export interface JanusClientEvents {
   'error': (error: Error) => void;
