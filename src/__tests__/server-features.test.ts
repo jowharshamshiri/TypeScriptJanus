@@ -5,16 +5,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as dgram from 'dgram';
+import * as unixDgram from 'unix-dgram';
 import { JanusServer } from '../server/janus-server';
 
-interface ServerConfig {
-  socketPath: string;
-  cleanupSocketFile?: boolean;
-  maxConcurrentConnections?: number;
-  defaultTimeout?: number;
-  maxMessageSize?: number;
-}
 import { JanusCommand, JanusResponse } from '../types/protocol';
 
 describe('Server Features', () => {
@@ -34,13 +27,10 @@ describe('Server Features', () => {
   // Helper function to create test server
   function createTestServer(): { server: JanusServer; socketPath: string } {
     const socketPath = path.join(tempDir, 'test-server.sock');
-    const config: ServerConfig = {
+    const config = {
       socketPath,
-      maxConcurrentConnections: 10,
       defaultTimeout: 5,
-      maxMessageSize: 1024,
-      cleanupOnStart: true,
-      cleanupOnShutdown: true
+      maxMessageSize: 1024
     };
     const server = new JanusServer(config);
     return { server, socketPath };
@@ -92,7 +82,7 @@ describe('Server Features', () => {
         };
 
         // Send command via SOCK_DGRAM
-        const clientSocket = dgram.createSocket({ type: 'unix_dgram' } as any);
+        const clientSocket = unixDgram.createSocket('unix_dgram');
         const commandData = Buffer.from(JSON.stringify(commandWithResponse));
         
         clientSocket.send(commandData, 0, commandData.length, socketPath, (error) => {
@@ -426,10 +416,8 @@ describe('Server Features', () => {
       expect(fs.existsSync(socketPath)).toBe(true);
 
       // Create server with cleanup enabled
-      const config: ServerConfig = {
-        socketPath,
-        cleanupSocketFile: true,
-        cleanupOnShutdown: true
+      const config = {
+        socketPath
       };
       const server = new JanusServer(config);
 

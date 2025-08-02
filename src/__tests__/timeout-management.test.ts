@@ -3,7 +3,8 @@
  * Tests for ResponseTracker timeout functionality and command timeout handling
  */
 
-import { ResponseTracker, ResponseTrackerError } from '../core/response-tracker';
+import { ResponseTracker } from '../core/response-tracker';
+import { JSONRPCError } from '../types/jsonrpc-error';
 import { JanusResponse } from '../types/protocol';
 
 describe('Timeout Management', () => {
