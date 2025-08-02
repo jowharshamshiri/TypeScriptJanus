@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as unixDgram from 'unix-dgram';
+import * as dgram from 'dgram';
 import { JanusServer } from '../server/janus-server';
 
 import { JanusCommand, JanusResponse } from '../types/protocol';
@@ -26,7 +27,8 @@ describe('Server Features', () => {
 
   // Helper function to create test server
   function createTestServer(): { server: JanusServer; socketPath: string } {
-    const socketPath = path.join(tempDir, 'test-server.sock');
+    // Use /tmp/ directly for socket path to satisfy validation
+    const socketPath = `/tmp/janus-test-${process.pid}-${Date.now()}.sock`;
     const config = {
       socketPath,
       defaultTimeout: 5,

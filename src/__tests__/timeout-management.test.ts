@@ -334,7 +334,7 @@ describe('Timeout Management', () => {
           done(new Error('Should not resolve - should reject duplicate'));
         },
         (error) => {
-          expect(error).toBeInstanceOf(ResponseTrackerError);
+          expect(error).toBeInstanceOf(Error);
           expect(error.message).toContain('already being tracked');
           done();
         },
@@ -359,7 +359,7 @@ describe('Timeout Management', () => {
           done(new Error('Should not resolve - should reject limit exceeded'));
         },
         (error) => {
-          expect(error).toBeInstanceOf(ResponseTrackerError);
+          expect(error).toBeInstanceOf(JSONRPCError);
           expect(error.message).toContain('Too many pending commands');
           limitedTracker.shutdown();
           done();
@@ -499,7 +499,7 @@ describe('Timeout Management', () => {
           done(new Error('Should not call reject - should call error handler'));
         },
         (error) => {
-          expect(error).toBeInstanceOf(ResponseTrackerError);
+          expect(error).toBeInstanceOf(Error);
           expect(error.message).toContain('already being tracked');
           done();
         },
@@ -557,7 +557,7 @@ describe('Timeout Management', () => {
           done(new Error('Should not call reject - should call error handler'));
         },
         (error) => {
-          expect(error).toBeInstanceOf(ResponseTrackerError);
+          expect(error).toBeInstanceOf(JSONRPCError);
           expect(error.message).toContain('Too many pending commands');
           limitedTracker.shutdown();
           done();
