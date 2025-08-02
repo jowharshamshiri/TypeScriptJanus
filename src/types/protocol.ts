@@ -39,32 +39,14 @@ export interface SocketResponse {
   /** Response data object (if success=true) */
   result?: Record<string, any>;
   
-  /** Error information (if success=false) */
-  error?: SocketError;
+  /** Error information (if success=false) - JSON-RPC 2.0 compliant */
+  error?: import('./jsonrpc-error').JSONRPCError;
   
   /** Response generation timestamp as Unix timestamp */
   timestamp: number;
 }
 
-export interface SocketError {
-  /** Error code from predefined set */
-  code: string;
-  
-  /** Human-readable error message */
-  message: string;
-  
-  /** Additional error context */
-  details?: string;
-  
-  /** Field that caused validation error */
-  field?: string;
-  
-  /** Invalid value that caused error */
-  value?: any;
-  
-  /** Validation constraints that were violated */
-  constraints?: Record<string, any>;
-}
+// Legacy SocketError interface removed - replaced by JSONRPCError in jsonrpc-error.ts
 
 export interface SocketMessage {
   /** Message type discriminator */
@@ -125,8 +107,8 @@ export interface SecurityConfig {
   allowedDirectories?: string[];
 }
 
-export interface APISpecification {
-  /** Semantic version of the API specification */
+export interface Manifest {
+  /** Semantic version of the Manifest */
   version: string;
   
   /** Human-readable name of the API */

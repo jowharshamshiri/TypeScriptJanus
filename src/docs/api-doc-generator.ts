@@ -5,7 +5,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { APISpecification, Command, Argument, Model } from '../types/protocol';
+import { Manifest, Command, Argument, Model } from '../types/protocol';
 
 export interface DocumentationOptions {
   /** Title for the documentation */
@@ -41,19 +41,19 @@ export interface GeneratedDocumentation {
   javascript: string;
   
   /** OpenAPI/Swagger JSON specification */
-  openApiSpec: any;
+  openManifest: any;
 }
 
 export class APIDocumentationGenerator {
-  private apiSpec: APISpecification;
+  private manifest: Manifest;
   private options: Required<DocumentationOptions>;
 
-  constructor(apiSpec: APISpecification, options: DocumentationOptions = {}) {
-    this.apiSpec = apiSpec;
+  constructor(manifest: Manifest, options: DocumentationOptions = {}) {
+    this.manifest = manifest;
     this.options = {
-      title: options.title ?? apiSpec.name ?? 'Janus API',
-      description: options.description ?? apiSpec.description ?? 'Janus Documentation',
-      version: options.version ?? apiSpec.version,
+      title: options.title ?? manifest.name ?? 'Janus API',
+      description: options.description ?? manifest.description ?? 'Janus Documentation',
+      version: options.version ?? manifest.version,
       includeExamples: options.includeExamples ?? true,
       includeTypes: options.includeTypes ?? true,
       customStyles: options.customStyles ?? '',
@@ -65,7 +65,7 @@ export class APIDocumentationGenerator {
    * Generate complete documentation
    */
   async generateDocumentation(): Promise<GeneratedDocumentation> {
-    const openApiSpec = this.generateOpenAPISpec();
+    const openManifest = this.generateOpenManifest();
     const html = this.generateHTML();
     const css = this.generateCSS();
     const javascript = this.generateJavaScript();
@@ -74,14 +74,14 @@ export class APIDocumentationGenerator {
       html,
       css,
       javascript,
-      openApiSpec
+      openManifest
     };
   }
 
   /**
    * Generate OpenAPI/Swagger specification
    */
-  generateOpenAPISpec(): any {
+  generateOpenManifest(): any {
     const spec = {
       openapi: '3.0.3',
       info: {
@@ -107,7 +107,7 @@ export class APIDocumentationGenerator {
     };
 
     // Convert channels to OpenAPI paths
-    for (const [channelId, channel] of Object.entries(this.apiSpec.channels)) {
+    for (const [channelId, channel] of Object.entries(this.manifest.channels)) {
       (spec.components['x-channels'] as any)[channelId] = {
         name: channel.name,
         description: channel.description
@@ -157,8 +157,8 @@ export class APIDocumentationGenerator {
     }
 
     // Add models to schemas
-    if (this.apiSpec.models) {
-      for (const [modelName, model] of Object.entries(this.apiSpec.models)) {
+    if (this.manifest.models) {
+      for (const [modelName, model] of Object.entries(this.manifest.models)) {
         (spec.components.schemas as any)[modelName] = this.generateModelSchema(model);
       }
     }
@@ -228,7 +228,7 @@ export class APIDocumentationGenerator {
             <div class="nav-section">
                 <h3>Channels</h3>
                 <ul>
-                    ${Object.entries(this.apiSpec.channels).map(([channelId, channel]) => `
+                    ${Object.entries(this.manifest.channels).map(([channelId, channel]) => `
                         <li>
                             <a href="#channel-${channelId}">${channel.name}</a>
                             <ul class="command-list">
@@ -241,11 +241,11 @@ export class APIDocumentationGenerator {
                 </ul>
             </div>
             
-            ${this.apiSpec.models ? `
+            ${this.manifest.models ? `
             <div class="nav-section">
                 <h3>Models</h3>
                 <ul>
-                    ${Object.keys(this.apiSpec.models).map(modelName => 
+                    ${Object.keys(this.manifest.models).map(modelName => 
                         `<li><a href="#model-${modelName}">${modelName}</a></li>`
                     ).join('')}
                 </ul>
@@ -270,11 +270,11 @@ export class APIDocumentationGenerator {
                 </div>
                 <div class="info-card">
                     <h3>Channels</h3>
-                    <p>${Object.keys(this.apiSpec.channels).length} available</p>
+                    <p>${Object.keys(this.manifest.channels).length} available</p>
                 </div>
                 <div class="info-card">
                     <h3>Commands</h3>
-                    <p>${Object.values(this.apiSpec.channels).reduce((total, channel) => total + Object.keys(channel.commands).length, 0)} total</p>
+                    <p>${Object.values(this.manifest.channels).reduce((total, channel) => total + Object.keys(channel.commands).length, 0)} total</p>
                 </div>
             </div>
         </section>
@@ -337,7 +337,7 @@ export class APIDocumentationGenerator {
 
         ${this.generateChannelDocumentation()}
         
-        ${this.apiSpec.models ? this.generateModelDocumentation() : ''}
+        ${this.manifest.models ? this.generateModelDocumentation() : ''}
     </main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-core.min.js"></script>
@@ -352,7 +352,7 @@ export class APIDocumentationGenerator {
    * Generate channel documentation
    */
   private generateChannelDocumentation(): string {
-    return Object.entries(this.apiSpec.channels).map(([channelId, channel]) => `
+    return Object.entries(this.manifest.channels).map(([channelId, channel]) => `
         <section id="channel-${channelId}" class="section">
             <h2>${channel.name}</h2>
             <p>${channel.description || ''}</p>
@@ -519,13 +519,13 @@ export class APIDocumentationGenerator {
    * Generate model documentation
    */
   private generateModelDocumentation(): string {
-    if (!this.apiSpec.models) return '';
+    if (!this.manifest.models) return '';
 
     return `
         <section id="models" class="section">
             <h2>Data Models</h2>
             
-            ${Object.entries(this.apiSpec.models).map(([modelName, model]) => `
+            ${Object.entries(this.manifest.models).map(([modelName, model]) => `
                 <div id="model-${modelName}" class="model">
                     <h3>${model.name}</h3>
                     <p>${model.description}</p>
@@ -1196,6 +1196,6 @@ document.addEventListener('DOMContentLoaded', function() {
     await fs.writeFile(path.join(outputDir, 'index.html'), docs.html);
     await fs.writeFile(path.join(outputDir, 'styles.css'), docs.css);
     await fs.writeFile(path.join(outputDir, 'script.js'), docs.javascript);
-    await fs.writeFile(path.join(outputDir, 'openapi.json'), JSON.stringify(docs.openApiSpec, null, 2));
+    await fs.writeFile(path.join(outputDir, 'openapi.json'), JSON.stringify(docs.openManifest, null, 2));
   }
 }

@@ -1,5 +1,5 @@
 /**
- * API Specification Parser for TypeScript Janus Implementation
+ * Manifest Parser for TypeScript Janus Implementation
  * Provides JSON and YAML parsing with comprehensive validation
  * Achieves 100% parity with Go/Rust/Swift implementations
  */
@@ -7,35 +7,35 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse as parseYAML } from 'yaml';
-import { APISpecification, Channel, Command, Argument, Model } from '../types/protocol';
+import { Manifest, Channel, Command, Argument, Model } from '../types/protocol';
 
 /**
- * Error thrown during API specification parsing or validation
+ * Error thrown during Manifest parsing or validation
  */
-export class APISpecificationError extends Error {
+export class ManifestError extends Error {
   constructor(message: string, public readonly details?: string) {
     super(message);
-    this.name = 'APISpecificationError';
+    this.name = 'ManifestError';
   }
 }
 
 /**
- * Parser for API specification documents in JSON and YAML formats
- * Matches Swift APISpecificationParser functionality exactly
+ * Parser for Manifest documents in JSON and YAML formats
+ * Matches Swift ManifestParser functionality exactly
  */
-export class APISpecificationParser {
+export class ManifestParser {
   
   constructor() {}
 
   /**
-   * Parse API specification from JSON data buffer
+   * Parse Manifest from JSON data buffer
    */
-  public parseJSON(data: Buffer): APISpecification {
+  public parseJSON(data: Buffer): Manifest {
     try {
       const jsonString = data.toString('utf8');
       return this.parseJSONString(jsonString);
     } catch (error) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         'Failed to parse JSON data',
         error instanceof Error ? error.message : String(error)
       );
@@ -43,15 +43,15 @@ export class APISpecificationParser {
   }
 
   /**
-   * Parse API specification from JSON string
+   * Parse Manifest from JSON string
    */
-  public parseJSONString(jsonString: string): APISpecification {
+  public parseJSONString(jsonString: string): Manifest {
     try {
       const parsed = JSON.parse(jsonString);
       return this.validateAndTransform(parsed);
     } catch (error) {
       if (error instanceof SyntaxError) {
-        throw new APISpecificationError(
+        throw new ManifestError(
           'Invalid JSON format',
           error.message
         );
@@ -61,14 +61,14 @@ export class APISpecificationParser {
   }
 
   /**
-   * Parse API specification from YAML data buffer
+   * Parse Manifest from YAML data buffer
    */
-  public parseYAML(data: Buffer): APISpecification {
+  public parseYAML(data: Buffer): Manifest {
     try {
       const yamlString = data.toString('utf8');
       return this.parseYAMLString(yamlString);
     } catch (error) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         'Failed to parse YAML data',
         error instanceof Error ? error.message : String(error)
       );
@@ -76,14 +76,14 @@ export class APISpecificationParser {
   }
 
   /**
-   * Parse API specification from YAML string
+   * Parse Manifest from YAML string
    */
-  public parseYAMLString(yamlString: string): APISpecification {
+  public parseYAMLString(yamlString: string): Manifest {
     try {
       const parsed = parseYAML(yamlString);
       return this.validateAndTransform(parsed);
     } catch (error) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         'YAML parsing failed',
         error instanceof Error ? error.message : String(error)
       );
@@ -91,10 +91,10 @@ export class APISpecificationParser {
   }
 
   /**
-   * Parse API specification from file path
+   * Parse Manifest from file path
    * Automatically detects JSON/YAML format based on file extension
    */
-  public parseFromFile(filePath: string): APISpecification {
+  public parseFromFile(filePath: string): Manifest {
     try {
       const data = fs.readFileSync(filePath);
       const fileExtension = path.extname(filePath).toLowerCase();
@@ -106,16 +106,16 @@ export class APISpecificationParser {
         case '.yml':
           return this.parseYAML(data);
         default:
-          throw new APISpecificationError(
+          throw new ManifestError(
             `Unsupported file format: ${fileExtension}`,
             'Supported formats: .json, .yaml, .yml'
           );
       }
     } catch (error) {
-      if (error instanceof APISpecificationError) {
+      if (error instanceof ManifestError) {
         throw error;
       }
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Failed to read file: ${filePath}`,
         error instanceof Error ? error.message : String(error)
       );
@@ -123,13 +123,13 @@ export class APISpecificationParser {
   }
 
   /**
-   * Validate API specification structure and content
+   * Validate Manifest structure and content
    * Static method matching Swift implementation pattern
    */
-  public static validate(spec: APISpecification): void {
+  public static validate(spec: Manifest): void {
     // Validate version format
     if (!spec.version || spec.version.trim() === '') {
-      throw new APISpecificationError(
+      throw new ManifestError(
         'API version cannot be empty',
         'Version field is required and must be non-empty string'
       );
@@ -137,7 +137,7 @@ export class APISpecificationParser {
 
     // Validate channels exist
     if (!spec.channels || Object.keys(spec.channels).length === 0) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         'API must define at least one channel',
         'Channels object is required and must contain at least one channel definition'
       );
@@ -150,19 +150,19 @@ export class APISpecificationParser {
   }
 
   /**
-   * Transform and validate parsed data into APISpecification type
+   * Transform and validate parsed data into Manifest type
    */
-  private validateAndTransform(parsed: any): APISpecification {
+  private validateAndTransform(parsed: any): Manifest {
     // Basic structure validation
     if (!parsed || typeof parsed !== 'object') {
-      throw new APISpecificationError(
+      throw new ManifestError(
         'Invalid specification format',
         'Root object is required'
       );
     }
 
     // Transform to typed structure
-    const spec: APISpecification = {
+    const spec: Manifest = {
       version: parsed.version,
       name: parsed.name,
       description: parsed.description,
@@ -171,7 +171,7 @@ export class APISpecificationParser {
     };
 
     // Validate the transformed specification
-    APISpecificationParser.validate(spec);
+    ManifestParser.validate(spec);
 
     return spec;
   }
@@ -181,14 +181,14 @@ export class APISpecificationParser {
    */
   private static validateChannel(channelId: string, channel: Channel, models?: Record<string, Model>): void {
     if (!channelId || channelId.trim() === '') {
-      throw new APISpecificationError(
+      throw new ManifestError(
         'Channel ID cannot be empty',
         'Channel identifiers must be non-empty strings'
       );
     }
 
     if (!channel.commands || Object.keys(channel.commands).length === 0) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Channel '${channelId}' must define at least one command`,
         'Each channel must contain at least one command definition'
       );
@@ -210,7 +210,7 @@ export class APISpecificationParser {
     models?: Record<string, Model>
   ): void {
     if (!commandName || commandName.trim() === '') {
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Command name cannot be empty in channel '${channelId}'`,
         'Command names must be non-empty strings'
       );
@@ -219,14 +219,14 @@ export class APISpecificationParser {
     // Check for reserved command names (matching Go/Rust/Swift)
     const reservedCommands = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'spec'];
     if (reservedCommands.includes(commandName)) {
-      throw new APISpecificationError(
-        `Command '${commandName}' is reserved and cannot be defined in API specification`,
+      throw new ManifestError(
+        `Command '${commandName}' is reserved and cannot be defined in Manifest`,
         `Reserved commands: ${reservedCommands.join(', ')}`
       );
     }
 
     if (!command.description || command.description.trim() === '') {
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Command '${commandName}' in channel '${channelId}' must have a description`,
         'Command descriptions are required for API documentation'
       );
@@ -256,7 +256,7 @@ export class APISpecificationParser {
     models?: Record<string, Model>
   ): void {
     if (!argName || argName.trim() === '') {
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Argument name cannot be empty in command '${commandName}' of channel '${channelId}'`,
         'Argument names must be non-empty strings'
       );
@@ -265,7 +265,7 @@ export class APISpecificationParser {
     // Validate type field
     const validTypes = ['string', 'number', 'integer', 'boolean', 'array', 'object'];
     if (!validTypes.includes(arg.type)) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Invalid argument type '${arg.type}' for argument '${argName}' in command '${commandName}' of channel '${channelId}'`,
         `Valid types: ${validTypes.join(', ')}`
       );
@@ -276,7 +276,7 @@ export class APISpecificationParser {
       try {
         new RegExp(arg.pattern);
       } catch (error) {
-        throw new APISpecificationError(
+        throw new ManifestError(
           `Invalid regex pattern '${arg.pattern}' for argument '${argName}' in command '${commandName}' of channel '${channelId}'`,
           error instanceof Error ? error.message : 'Regex compilation failed'
         );
@@ -286,7 +286,7 @@ export class APISpecificationParser {
     // Validate numeric constraints
     if ((arg.type === 'number' || arg.type === 'integer') && arg.minimum !== undefined && arg.maximum !== undefined) {
       if (arg.minimum > arg.maximum) {
-        throw new APISpecificationError(
+        throw new ManifestError(
           `Invalid numeric constraints for argument '${argName}' in command '${commandName}' of channel '${channelId}'`,
           `Minimum value (${arg.minimum}) cannot be greater than maximum value (${arg.maximum})`
         );
@@ -295,7 +295,7 @@ export class APISpecificationParser {
 
     // Validate model references
     if (arg.modelRef && models && !models[arg.modelRef]) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Model reference '${arg.modelRef}' not found for argument '${argName}' in command '${commandName}' of channel '${channelId}'`,
         'Referenced models must be defined in the models section'
       );
@@ -325,7 +325,7 @@ export class APISpecificationParser {
   ): void {
     const validTypes = ['string', 'number', 'integer', 'boolean', 'array', 'object'];
     if (!validTypes.includes(response.type)) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Invalid response type '${response.type}' for command '${commandName}' in channel '${channelId}'`,
         `Valid types: ${validTypes.join(', ')}`
       );
@@ -333,10 +333,184 @@ export class APISpecificationParser {
 
     // Validate model references
     if (response.modelRef && models && !models[response.modelRef]) {
-      throw new APISpecificationError(
+      throw new ManifestError(
         `Model reference '${response.modelRef}' not found for response in command '${commandName}' of channel '${channelId}'`,
         'Referenced models must be defined in the models section'
       );
     }
+  }
+
+  /**
+   * Parse multiple specification files and merge them
+   * Useful for modular Manifests (matches Go implementation)
+   */
+  public parseMultipleFiles(filePaths: string[]): Manifest {
+    if (!filePaths || filePaths.length === 0) {
+      throw new ManifestError(
+        'No files provided',
+        'At least one file path is required for multi-file parsing'
+      );
+    }
+
+    // Parse first file as base
+    const firstFile = filePaths[0];
+    if (!firstFile) {
+      throw new ManifestError('First file path is undefined');
+    }
+    const baseSpec = this.parseFromFile(firstFile);
+
+    // Merge additional files
+    for (let i = 1; i < filePaths.length; i++) {
+      const filePath = filePaths[i];
+      if (!filePath) {
+        throw new ManifestError(`File path at index ${i} is undefined`);
+      }
+      
+      const additionalSpec = this.parseFromFile(filePath);
+      this.mergeSpecifications(baseSpec, additionalSpec);
+    }
+
+    // Validate merged specification
+    ManifestParser.validate(baseSpec);
+
+    return baseSpec;
+  }
+
+  /**
+   * Merge two Manifests
+   * The additional spec's channels and models are added to the base spec
+   */
+  private mergeSpecifications(base: Manifest, additional: Manifest): void {
+    // Merge channels
+    for (const [channelId, channel] of Object.entries(additional.channels)) {
+      if (base.channels[channelId]) {
+        throw new ManifestError(
+          `Channel '${channelId}' already exists in base specification`,
+          'Channel names must be unique across all merged specifications'
+        );
+      }
+      base.channels[channelId] = channel;
+    }
+
+    // Merge models
+    if (additional.models) {
+      if (!base.models) {
+        base.models = {};
+      }
+
+      for (const [modelName, model] of Object.entries(additional.models)) {
+        if (base.models[modelName]) {
+          throw new ManifestError(
+            `Model '${modelName}' already exists in base specification`,
+            'Model names must be unique across all merged specifications'
+          );
+        }
+        base.models[modelName] = model;
+      }
+    }
+  }
+
+  /**
+   * Serialize Manifest to JSON string
+   * Useful for converting specifications back to JSON format
+   */
+  public serializeToJSON(spec: Manifest, pretty: boolean = false): string {
+    // Validate before serialization
+    ManifestParser.validate(spec);
+    
+    if (pretty) {
+      return JSON.stringify(spec, null, 2);
+    } else {
+      return JSON.stringify(spec);
+    }
+  }
+
+  /**
+   * Serialize Manifest to YAML string
+   * Useful for converting specifications back to YAML format
+   */
+  public serializeToYAML(spec: Manifest): string {
+    // Validate before serialization
+    ManifestParser.validate(spec);
+    
+    // Using stringify from yaml package to serialize
+    const yaml = require('yaml');
+    return yaml.stringify(spec);
+  }
+
+  // Static Interface Methods (matching Go implementation)
+
+  /**
+   * Static method for parsing JSON data
+   */
+  public static parseJSON(data: Buffer): Manifest {
+    const parser = new ManifestParser();
+    return parser.parseJSON(data);
+  }
+
+  /**
+   * Static method for parsing JSON strings
+   */
+  public static parseJSONString(jsonString: string): Manifest {
+    const parser = new ManifestParser();
+    return parser.parseJSONString(jsonString);
+  }
+
+  /**
+   * Static method for parsing YAML data
+   */
+  public static parseYAML(data: Buffer): Manifest {
+    const parser = new ManifestParser();
+    return parser.parseYAML(data);
+  }
+
+  /**
+   * Static method for parsing YAML strings
+   */
+  public static parseYAMLString(yamlString: string): Manifest {
+    const parser = new ManifestParser();
+    return parser.parseYAMLString(yamlString);
+  }
+
+  /**
+   * Static method for parsing from file
+   */
+  public static parseFromFile(filePath: string): Manifest {
+    const parser = new ManifestParser();
+    return parser.parseFromFile(filePath);
+  }
+
+  /**
+   * Static method for parsing multiple files
+   */
+  public static parseMultipleFiles(filePaths: string[]): Manifest {
+    const parser = new ManifestParser();
+    return parser.parseMultipleFiles(filePaths);
+  }
+
+  /**
+   * Static method for JSON serialization
+   */
+  public static serializeToJSON(spec: Manifest, pretty: boolean = false): string {
+    const parser = new ManifestParser();
+    return parser.serializeToJSON(spec, pretty);
+  }
+
+  /**
+   * Static method for YAML serialization
+   */
+  public static serializeToYAML(spec: Manifest): string {
+    const parser = new ManifestParser();
+    return parser.serializeToYAML(spec);
+  }
+
+  /**
+   * Static method for specification merging
+   */
+  public static mergeSpecifications(base: Manifest, additional: Manifest): Manifest {
+    const parser = new ManifestParser();
+    const mergedSpec = { ...base };
+    parser.mergeSpecifications(mergedSpec, additional);
+    return mergedSpec;
   }
 }

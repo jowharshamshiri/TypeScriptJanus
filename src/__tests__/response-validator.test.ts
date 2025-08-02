@@ -1,21 +1,21 @@
 /**
  * Comprehensive tests for ResponseValidator
- * Validates all response validation scenarios against API specifications
+ * Validates all response validation scenarios against Manifests
  */
 
 import { ResponseValidator } from '../specification/response-validator';
-import { APISpecification, ResponseDefinition } from '../types/protocol';
+import { Manifest, ResponseDefinition } from '../types/protocol';
 
 describe('ResponseValidator', () => {
   let validator: ResponseValidator;
-  let testApiSpec: APISpecification;
+  let testManifest: Manifest;
 
   beforeEach(() => {
-    // Create test API specification
-    testApiSpec = {
+    // Create test Manifest
+    testManifest = {
       version: '1.0.0',
       name: 'Test API',
-      description: 'Test API specification for response validation',
+      description: 'Test Manifest for response validation',
       channels: {
         'test': {
           name: 'test',
@@ -116,7 +116,7 @@ describe('ResponseValidator', () => {
       }
     };
 
-    validator = new ResponseValidator(testApiSpec);
+    validator = new ResponseValidator(testManifest);
   });
 
   describe('Basic Response Validation', () => {
@@ -322,13 +322,13 @@ describe('ResponseValidator', () => {
 
     test('should handle missing response specification', () => {
       // Add command without response specification
-      testApiSpec.channels.test!.commands.no_response = {
+      testManifest.channels.test!.commands.no_response = {
         name: 'no_response',
         description: 'Command without response spec'
         // No response field
       };
 
-      validator = new ResponseValidator(testApiSpec);
+      validator = new ResponseValidator(testManifest);
       const response = { status: 'ok' };
 
       const result = validator.validateCommandResponse(response, 'test', 'no_response');
@@ -411,7 +411,7 @@ describe('ResponseValidator', () => {
   describe('Model References', () => {
     test('should handle model references', () => {
       // Add command that uses model reference
-      testApiSpec.channels.test!.commands.user_info = {
+      testManifest.channels.test!.commands.user_info = {
         name: 'user_info',
         description: 'Get user information',
         response: {
@@ -421,7 +421,7 @@ describe('ResponseValidator', () => {
         }
       };
 
-      validator = new ResponseValidator(testApiSpec);
+      validator = new ResponseValidator(testManifest);
 
       const validResponse = {
         id: 'user123',
@@ -445,7 +445,7 @@ describe('ResponseValidator', () => {
     });
 
     test('should handle missing model reference', () => {
-      testApiSpec.channels.test!.commands.bad_ref = {
+      testManifest.channels.test!.commands.bad_ref = {
         name: 'bad_ref',
         description: 'Command with bad model reference',
         response: {
@@ -455,7 +455,7 @@ describe('ResponseValidator', () => {
         }
       };
 
-      validator = new ResponseValidator(testApiSpec);
+      validator = new ResponseValidator(testManifest);
 
       const response = { data: 'test' };
       const result = validator.validateCommandResponse(response, 'test', 'bad_ref');

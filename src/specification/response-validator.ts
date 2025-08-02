@@ -1,10 +1,10 @@
 /**
  * Response Validator for TypeScript Janus Implementation
- * Validates command handler responses against API specification ResponseDefinition models
+ * Validates command handler responses against Manifest ResponseDefinition models
  * Achieves 100% parity with Go/Rust/Swift implementations
  */
 
-import { APISpecification, ResponseDefinition, Argument, Model } from '../types/protocol';
+import { Manifest, ResponseDefinition, Argument, Model } from '../types/protocol';
 
 /**
  * Represents a validation error with detailed context
@@ -45,12 +45,12 @@ export interface ValidationResult {
 
 /**
  * Response validator that validates command handler responses
- * against API specification ResponseDefinition models
+ * against Manifest ResponseDefinition models
  */
 export class ResponseValidator {
-  private specification: APISpecification;
+  private specification: Manifest;
 
-  constructor(specification: APISpecification) {
+  constructor(specification: Manifest) {
     this.specification = specification;
   }
 
@@ -97,7 +97,7 @@ export class ResponseValidator {
         valid: false,
         errors: [{
           field: 'channelId',
-          message: `Channel '${channelId}' not found in API specification`,
+          message: `Channel '${channelId}' not found in Manifest`,
           expected: 'valid channel ID',
           actual: channelId
         }],

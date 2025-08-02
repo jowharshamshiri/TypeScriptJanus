@@ -116,8 +116,8 @@ export class ResponseTracker extends EventEmitter {
     } else {
       const error = new ResponseTrackerError(
         response.error?.message ?? 'Command failed',
-        response.error?.code ?? 'COMMAND_FAILED',
-        response.error?.details
+        response.error?.code?.toString() ?? 'COMMAND_FAILED',
+        response.error?.data?.details
       );
       pending.reject(error);
     }
@@ -223,6 +223,104 @@ export class ResponseTracker extends EventEmitter {
       oldestCommand,
       newestCommand
     };
+  }
+
+  /**
+   * Track command with error callback support (matches Swift error-handled registration)
+   */
+  trackCommandWithErrorHandling(
+    commandId: string,
+    resolve: (response: SocketResponse) => void,
+    reject: (error: Error) => void,
+    onError: (error: Error) => void,
+    timeout: number = this.config.defaultTimeout
+  ): void {
+    // Check limits
+    if (this.pendingCommands.size >= this.config.maxPendingCommands) {
+      onError(new ResponseTrackerError(
+        'Too many pending commands',
+        'PENDING_COMMANDS_LIMIT',
+        `Maximum ${this.config.maxPendingCommands} commands allowed`
+      ));
+      return;
+    }
+
+    // Check for duplicate tracking
+    if (this.pendingCommands.has(commandId)) {
+      onError(new ResponseTrackerError(
+        'Command already being tracked',
+        'DUPLICATE_COMMAND_ID',
+        `Command ${commandId} is already awaiting response`
+      ));
+      return;
+    }
+
+    // If no errors, proceed with normal tracking
+    this.trackCommand(commandId, resolve, reject, timeout);
+  }
+
+  /**
+   * Register bilateral timeout for request/response pairs (matches Go/Swift implementation)
+   */
+  trackBilateralTimeout(
+    baseCommandId: string,
+    requestResolve: (response: SocketResponse) => void,
+    requestReject: (error: Error) => void,
+    responseResolve: (response: SocketResponse) => void,
+    responseReject: (error: Error) => void,
+    requestTimeout: number = this.config.defaultTimeout,
+    responseTimeout: number = this.config.defaultTimeout
+  ): void {
+    const requestId = `${baseCommandId}-request`;
+    const responseId = `${baseCommandId}-response`;
+
+    // Track request timeout
+    this.trackCommand(requestId, requestResolve, requestReject, requestTimeout);
+    
+    // Track response timeout
+    this.trackCommand(responseId, responseResolve, responseReject, responseTimeout);
+  }
+
+  /**
+   * Cancel bilateral timeout (matches Swift implementation)
+   */
+  cancelBilateralTimeout(baseCommandId: string): number {
+    const requestId = `${baseCommandId}-request`;
+    const responseId = `${baseCommandId}-response`;
+    
+    let cancelledCount = 0;
+    
+    if (this.cancelCommand(requestId)) {
+      cancelledCount++;
+    }
+    
+    if (this.cancelCommand(responseId)) {
+      cancelledCount++;
+    }
+    
+    return cancelledCount;
+  }
+
+  /**
+   * Extend timeout for existing command (matches Swift extendTimeout implementation)
+   */
+  extendTimeout(commandId: string, additionalTime: number): boolean {
+    const pending = this.pendingCommands.get(commandId);
+    
+    if (!pending) {
+      return false;
+    }
+
+    // Update the timeout value and reset the timer
+    pending.timeout += additionalTime;
+    
+    // We need to restart the timeout with the additional time
+    // Create a new timeout that will trigger after the additional time
+    setTimeout(() => {
+      this.handleTimeout(commandId);
+    }, additionalTime * 1000);
+    
+    return true;
   }
 
   /**

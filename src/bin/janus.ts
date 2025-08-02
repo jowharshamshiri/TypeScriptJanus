@@ -178,8 +178,8 @@ async function sendResponse(
         success,
         ...(Object.keys(result).length > 0 && { result }),
         ...(!success && { error: {
-            code: 'UNKNOWN_COMMAND',
-            message: 'Unknown command'
+            code: -32601,
+            message: 'Method not found'
         } }),
         timestamp: Date.now() / 1000
     };

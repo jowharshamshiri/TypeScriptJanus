@@ -459,9 +459,9 @@ export class JanusServer extends EventEmitter {
       channelId: command.channelId,
       success: false,
       error: {
-        code: errorCode,
+        code: typeof errorCode === 'string' ? -32000 : errorCode,
         message: errorMessage,
-        ...(errorDetails && { details: errorDetails })
+        ...(errorDetails && { data: { details: errorDetails } })
       },
       timestamp: Date.now() / 1000
     };

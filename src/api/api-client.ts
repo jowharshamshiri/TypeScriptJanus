@@ -1,10 +1,10 @@
 /**
  * High-level API Client for Janus Protocol
- * Provides convenient interface for API specification based communication
+ * Provides convenient interface for Manifest based communication
  */
 
 import { JanusClient } from '../core/janus-client';
-import { APISpecification, ConnectionConfig, SocketCommand } from '../types/protocol';
+import { Manifest, ConnectionConfig, SocketCommand } from '../types/protocol';
 
 export class APIClientError extends Error {
   constructor(message: string, public code: string, public details?: string) {
@@ -14,10 +14,10 @@ export class APIClientError extends Error {
 }
 
 export interface APIClientConfig extends ConnectionConfig {
-  /** API specification for validation and documentation */
-  apiSpec?: APISpecification;
+  /** Manifest for validation and documentation */
+  manifest?: Manifest;
   
-  /** Whether to validate commands against API specification */
+  /** Whether to validate commands against Manifest */
   validateAgainstSpec?: boolean;
   
   /** Whether to auto-reconnect on connection loss */
@@ -27,11 +27,11 @@ export interface APIClientConfig extends ConnectionConfig {
 export class APIClient {
   private client: JanusClient;
   private config: APIClientConfig;
-  private apiSpec: APISpecification | undefined;
+  private manifest: Manifest | undefined;
 
   constructor(config: APIClientConfig) {
     this.config = config;
-    this.apiSpec = config.apiSpec;
+    this.manifest = config.manifest;
     
     // Create underlying datagram client
     const clientConfig: ConnectionConfig = {
@@ -69,8 +69,8 @@ export class APIClient {
     args?: Record<string, any>,
     timeout?: number
   ): Promise<any> {
-    // Validate against API specification if configured
-    if (this.config.validateAgainstSpec && this.apiSpec) {
+    // Validate against Manifest if configured
+    if (this.config.validateAgainstSpec && this.manifest) {
       this.validateCommandAgainstSpec(channelId, commandName, args);
     }
 
@@ -89,8 +89,8 @@ export class APIClient {
       if (!response.success) {
         throw new APIClientError(
           response.error?.message ?? 'Command failed',
-          response.error?.code ?? 'COMMAND_FAILED',
-          response.error?.details
+          response.error?.code?.toString() ?? 'COMMAND_FAILED',
+          response.error?.data?.details
         );
       }
       
@@ -124,67 +124,67 @@ export class APIClient {
   }
 
   /**
-   * Set or update the API specification
+   * Set or update the Manifest
    */
-  setAPISpecification(apiSpec: APISpecification): void {
-    this.apiSpec = apiSpec;
+  setManifest(manifest: Manifest): void {
+    this.manifest = manifest;
   }
 
   /**
-   * Get the current API specification
+   * Get the current Manifest
    */
-  getAPISpecification(): APISpecification | undefined {
-    return this.apiSpec;
+  getManifest(): Manifest | undefined {
+    return this.manifest;
   }
 
   /**
    * Get available channels
    */
   getAvailableChannels(): string[] {
-    if (!this.apiSpec) {
+    if (!this.manifest) {
       return [];
     }
     
-    return Object.keys(this.apiSpec.channels);
+    return Object.keys(this.manifest.channels);
   }
 
   /**
    * Get available commands for a channel
    */
   getAvailableCommands(channelId: string): string[] {
-    if (!this.apiSpec || !this.apiSpec.channels[channelId]) {
+    if (!this.manifest || !this.manifest.channels[channelId]) {
       return [];
     }
     
-    return Object.keys(this.apiSpec.channels[channelId].commands);
+    return Object.keys(this.manifest.channels[channelId].commands);
   }
 
   /**
    * Get command information
    */
   getCommandInfo(channelId: string, commandName: string) {
-    if (!this.apiSpec || !this.apiSpec.channels[channelId] || 
-        !this.apiSpec.channels[channelId].commands[commandName]) {
+    if (!this.manifest || !this.manifest.channels[channelId] || 
+        !this.manifest.channels[channelId].commands[commandName]) {
       return null;
     }
     
-    return this.apiSpec.channels[channelId].commands[commandName];
+    return this.manifest.channels[channelId].commands[commandName];
   }
 
   /**
-   * Validate command arguments against API specification
+   * Validate command arguments against Manifest
    */
   validateCommandArgs(channelId: string, commandName: string, args: Record<string, any> = {}): {
     valid: boolean;
     errors: string[];
   } {
-    if (!this.apiSpec) {
+    if (!this.manifest) {
       return { valid: true, errors: [] };
     }
 
-    const command = this.apiSpec.channels[channelId]?.commands[commandName];
+    const command = this.manifest.channels[channelId]?.commands[commandName];
     if (!command) {
-      return { valid: false, errors: [`Command ${channelId}.${commandName} not found in API specification`] };
+      return { valid: false, errors: [`Command ${channelId}.${commandName} not found in Manifest`] };
     }
 
     const errors: string[] = [];
@@ -238,14 +238,14 @@ export class APIClient {
   }
 
   /**
-   * Validate command against API specification
+   * Validate command against Manifest
    */
   private validateCommandAgainstSpec(channelId: string, commandName: string, args?: Record<string, any>): void {
-    if (!this.apiSpec) {
+    if (!this.manifest) {
       throw new APIClientError(
-        'No API specification available for validation',
+        'No Manifest available for validation',
         'NO_API_SPEC',
-        'Set an API specification to enable validation'
+        'Set an Manifest to enable validation'
       );
     }
 

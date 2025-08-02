@@ -13,7 +13,7 @@ import * as fs from 'fs';
 function parseArgs() {
   const args = process.argv.slice(2);
   let socketPath = path.join('/tmp', 'typescript-unix-sock-api-example.sock');
-  let specPath = path.join(__dirname, '../../..', 'example-api-spec.json');
+  let specPath = path.join(__dirname, '../../..', 'example-manifest.json');
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -54,22 +54,22 @@ async function main() {
   console.log('🚀 Starting TypeScript Janus Client Example');
   console.log(`📍 Socket path: ${SOCKET_PATH}`);
 
-  // Load API specification
-  let apiSpec;
+  // Load Manifest
+  let manifest;
   try {
-    const apiSpecContent = await fs.promises.readFile(API_SPEC_PATH, 'utf8');
-    apiSpec = JSON.parse(apiSpecContent);
-    console.log(`📋 Loaded API specification: ${apiSpec.name} v${apiSpec.version}`);
+    const manifestContent = await fs.promises.readFile(API_SPEC_PATH, 'utf8');
+    manifest = JSON.parse(manifestContent);
+    console.log(`📋 Loaded Manifest: ${manifest.name} v${manifest.version}`);
   } catch (error) {
-    console.warn(`⚠️ Could not load API spec from ${API_SPEC_PATH}, continuing without validation`);
+    console.warn(`⚠️ Could not load Manifest from ${API_SPEC_PATH}, continuing without validation`);
   }
 
   // Create client
   const client = new APIClient({
     socketPath: SOCKET_PATH,
     defaultTimeout: 10.0,
-    apiSpec,
-    validateAgainstSpec: !!apiSpec,
+    manifest,
+    validateAgainstSpec: !!manifest,
     autoReconnect: true
   });
 
@@ -83,7 +83,7 @@ async function main() {
     console.log('✅ Server is reachable');
 
     // Show available channels and commands
-    if (apiSpec) {
+    if (manifest) {
       console.log('\n📋 Available channels and commands:');
       for (const channelId of client.getAvailableChannels()) {
         console.log(`   📁 ${channelId}:`);
@@ -197,8 +197,8 @@ async function runExampleCommands(client: APIClient) {
     });
     console.log('✅ User deleted:', JSON.stringify(deleteResult, null, 2));
 
-    // Test command validation (if API spec is loaded)
-    if (client.getAPISpecification()) {
+    // Test command validation (if Manifest is loaded)
+    if (client.getManifest()) {
       console.log('\n🔟 Testing command validation...');
       const validation = client.validateCommandArgs('user-service', 'create-user', {
         username: 'test',

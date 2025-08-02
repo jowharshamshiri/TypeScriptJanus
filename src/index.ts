@@ -16,7 +16,7 @@ export { ResponseTracker, ResponseTrackerError } from './core/response-tracker';
 export { APIClient, APIClientError } from './api/api-client';
 
 // Specification parsing
-export { APISpecificationParser, APISpecificationError } from './specification/api-specification-parser';
+export { ManifestParser, ManifestError } from './specification/manifest-parser';
 
 // Protocol layer (main API)
 export { JanusClient, JanusClientError } from './protocol/janus-client';
@@ -25,14 +25,23 @@ export { JanusClient, JanusClientError } from './protocol/janus-client';
 export type {
   SocketCommand,
   SocketResponse,
-  SocketError,
   PendingCommand,
   ConnectionConfig,
   SecurityConfig,
-  APISpecification,
+  Manifest,
   Channel,
   Command,
   Argument,
   CommandHandler,
   CommandHandlerRegistry
 } from './types/protocol';
+
+// Export JSON-RPC error types
+export {
+  JSONRPCError,
+  JSONRPCErrorCode,
+  JSONRPCErrorData,
+  JSONRPCErrorBuilder,
+  JSONRPCErrorClass,
+  JSONRPCErrorUtils
+} from './types/jsonrpc-error';

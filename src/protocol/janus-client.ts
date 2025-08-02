@@ -6,7 +6,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { JanusClient as CoreJanusClient } from '../core/janus-client';
 import { 
-  APISpecification, 
+  Manifest, 
   SocketCommand, 
   SocketResponse
 } from '../types/protocol';
@@ -30,7 +30,7 @@ export interface JanusClientConfig {
   /** Datagram timeout for socket operations in seconds */
   datagramTimeout?: number;
   
-  /** Enable command validation against API specification */
+  /** Enable command validation against Manifest */
   enableValidation?: boolean;
 }
 
@@ -45,21 +45,21 @@ export class JanusClientError extends Error {
 }
 
 /**
- * High-level SOCK_DGRAM client with API specification integration
+ * High-level SOCK_DGRAM client with Manifest integration
  * Provides command validation, response correlation, and security hardening
  */
 export class JanusClient {
   private readonly socketPath: string;
   private readonly channelId: string;
-  private apiSpec: APISpecification | undefined;
+  private manifest: Manifest | undefined;
   private readonly janusClient: CoreJanusClient;
   private readonly defaultTimeout: number;
   private readonly enableValidation: boolean;
 
-  private constructor(config: JanusClientConfig, apiSpec?: APISpecification) {
+  private constructor(config: JanusClientConfig, manifest?: Manifest) {
     this.socketPath = config.socketPath;
     this.channelId = config.channelId;
-    this.apiSpec = apiSpec;
+    this.manifest = manifest;
     this.defaultTimeout = config.defaultTimeout ?? 30.0;
     this.enableValidation = config.enableValidation ?? true;
 
@@ -81,7 +81,7 @@ export class JanusClient {
       config.channelId
     );
 
-    // Create client instance - API spec will be fetched during operations when needed
+    // Create client instance - Manifest will be fetched during operations when needed
     const client = new JanusClient(config);
 
     return client;
@@ -109,14 +109,14 @@ export class JanusClient {
       ...(args && { args })
     };
 
-    // Ensure API specification is loaded for validation
+    // Ensure Manifest is loaded for validation
     if (this.enableValidation) {
-      await this.ensureApiSpecLoaded();
+      await this.ensureManifestLoaded();
     }
 
-    // Validate command against API specification
-    if (this.enableValidation && this.apiSpec) {
-      this.validateCommandAgainstSpec(this.apiSpec, socketCommand);
+    // Validate command against Manifest
+    if (this.enableValidation && this.manifest) {
+      this.validateCommandAgainstSpec(this.manifest, socketCommand);
     }
 
     // Send datagram and wait for response
@@ -161,9 +161,9 @@ export class JanusClient {
       // No reply_to field for fire-and-forget
     };
 
-    // Validate command against API specification
-    if (this.enableValidation && this.apiSpec) {
-      this.validateCommandAgainstSpec(this.apiSpec, socketCommand);
+    // Validate command against Manifest
+    if (this.enableValidation && this.manifest) {
+      this.validateCommandAgainstSpec(this.manifest, socketCommand);
     }
 
     // Send datagram without waiting for response
@@ -256,14 +256,14 @@ export class JanusClient {
   }
 
   /**
-   * Validate command against API specification
+   * Validate command against Manifest
    * Matches Swift validateCommandAgainstSpec method exactly
    */
-  private validateCommandAgainstSpec(spec: APISpecification, command: SocketCommand): void {
-    // Check if command is reserved (built-in commands should never be in API specs)
+  private validateCommandAgainstSpec(spec: Manifest, command: SocketCommand): void {
+    // Check if command is reserved (built-in commands should never be in Manifests)
     if (this.isBuiltinCommand(command.command)) {
       throw new JanusClientError(
-        `Command '${command.command}' is reserved and cannot be used from API specification`,
+        `Command '${command.command}' is reserved and cannot be used from Manifest`,
         'RESERVED_COMMAND_ERROR'
       );
     }
@@ -272,7 +272,7 @@ export class JanusClient {
     const channel = spec.channels[command.channelId];
     if (!channel) {
       throw new JanusClientError(
-        `Channel ${command.channelId} not found in API specification`,
+        `Channel ${command.channelId} not found in Manifest`,
         'VALIDATION_ERROR'
       );
     }
@@ -319,10 +319,10 @@ export class JanusClient {
   }
 
   /**
-   * Get the API specification
+   * Get the Manifest
    */
-  public get apiSpecification(): APISpecification | undefined {
-    return this.apiSpec;
+  public get manifest(): Manifest | undefined {
+    return this.manifest;
   }
 
   // MARK: - Built-in Command Support
@@ -336,10 +336,10 @@ export class JanusClient {
   }
 
   /**
-   * Ensure API specification is loaded, fetching from server if needed
+   * Ensure Manifest is loaded, fetching from server if needed
    */
-  private async ensureApiSpecLoaded(): Promise<void> {
-    if (this.apiSpec !== undefined) {
+  private async ensureManifestLoaded(): Promise<void> {
+    if (this.manifest !== undefined) {
       return; // Already loaded
     }
 
@@ -348,16 +348,16 @@ export class JanusClient {
     }
 
     try {
-      // Fetch API specification from server using spec command
+      // Fetch Manifest from server using spec command
       const specResponse = await this.sendBuiltinCommand('spec', undefined, 10.0);
       
       if (specResponse.success && specResponse.result) {
         // Parse the specification from the response
-        const { APISpecificationParser } = await import('../specification/api-specification-parser');
-        const parser = new APISpecificationParser();
+        const { ManifestParser } = await import('../specification/manifest-parser');
+        const parser = new ManifestParser();
         const jsonString = JSON.stringify(specResponse.result);
         const fetchedSpec = parser.parseJSONString(jsonString);
-        this.apiSpec = fetchedSpec;
+        this.manifest = fetchedSpec;
         
         // Validate channel exists in fetched specification
         if (!fetchedSpec.channels || !fetchedSpec.channels[this.channelId]) {
@@ -365,12 +365,12 @@ export class JanusClient {
         }
       } else {
         // If spec command fails, continue without validation
-        this.apiSpec = undefined;
+        this.manifest = undefined;
       }
     } catch (error) {
       // If spec fetching fails, continue without validation
-      console.warn(`Failed to fetch API specification: ${error instanceof Error ? error.message : error}`);
-      this.apiSpec = undefined;
+      console.warn(`Failed to fetch Manifest: ${error instanceof Error ? error.message : error}`);
+      this.manifest = undefined;
     }
   }
 
@@ -476,12 +476,12 @@ export class JanusClient {
    * Validates command exists in specification without actual handler registration
    */
   async registerCommandHandler(command: string, _handler: Function): Promise<void> {
-    // Ensure API spec is loaded
-    await this.ensureApiSpecLoaded();
+    // Ensure Manifest is loaded
+    await this.ensureManifestLoaded();
 
-    // Validate command exists in the API specification for the client's channel
-    if (this.apiSpec) {
-      const channel = this.apiSpec.channels?.[this.channelId];
+    // Validate command exists in the Manifest for the client's channel
+    if (this.manifest) {
+      const channel = this.manifest.channels?.[this.channelId];
       if (channel && !channel.commands?.[command]) {
         throw new JanusClientError(
           `Command '${command}' not found in channel '${this.channelId}'`,

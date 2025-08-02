@@ -8,7 +8,7 @@ TypeScript implementation of the Janus Protocol providing cross-platform inter-p
 - **Async/Await Support**: Modern TypeScript async patterns throughout
 - **Comprehensive Security**: 25+ security validation mechanisms
 - **Type Safety**: Full TypeScript type definitions for all protocol components
-- **API Specification Support**: JSON schema-based API validation and documentation
+- **Manifest Support**: JSON schema-based API validation and documentation
 - **High-Level API Client**: Convenient abstraction for common use cases
 - **Cross-Platform Testing**: Validated against all other language implementations
 
@@ -81,17 +81,17 @@ const userInfo = await userService.execute('get-user', {
 });
 ```
 
-## API Specification Support
+## Manifest Support
 
-The TypeScript implementation supports JSON-based API specifications for validation and documentation:
+The TypeScript implementation supports JSON-based Manifests for validation and documentation:
 
 ```typescript
 import { APIClient } from 'typescript-unix-sock-api';
-import apiSpec from './my-api-spec.json';
+import manifest from './my-manifest.json';
 
 const client = new APIClient({
   socketPath: '/tmp/my-app.sock',
-  apiSpec,
+  manifest,
   validateAgainstSpec: true  // Enable automatic validation
 });
 
@@ -115,7 +115,7 @@ The implementation includes comprehensive security validation:
 
 - **JanusClient**: Low-level socket client with async message handling
 - **JanusServer**: Server with command routing and handler management
-- **APIClient**: High-level client with API specification support
+- **APIClient**: High-level client with Manifest support
 - **SecurityValidator**: Comprehensive security validation framework
 - **MessageFraming**: 4-byte length prefix message framing
 - **ResponseTracker**: Async response correlation and timeout management

@@ -8,24 +8,24 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { APIDocumentationGenerator } from '../docs/api-doc-generator';
-import { APISpecification } from '../types/protocol';
+import { Manifest } from '../types/protocol';
 
 async function main() {
   console.log('🚀 Generating API Documentation...');
 
   try {
-    // Load API specification
-    const apiSpecPath = path.join(__dirname, '../../..', 'example-api-spec.json');
-    const apiSpecContent = await fs.readFile(apiSpecPath, 'utf8');
-    const apiSpec: APISpecification = JSON.parse(apiSpecContent);
+    // Load Manifest
+    const manifestPath = path.join(__dirname, '../../..', 'example-manifest.json');
+    const manifestContent = await fs.readFile(manifestPath, 'utf8');
+    const manifest: Manifest = JSON.parse(manifestContent);
 
-    console.log(`📋 Loaded API specification: ${apiSpec.name} v${apiSpec.version}`);
+    console.log(`📋 Loaded Manifest: ${manifest.name} v${manifest.version}`);
 
     // Create documentation generator
-    const generator = new APIDocumentationGenerator(apiSpec, {
-      title: apiSpec.name ?? 'Janus API',
+    const generator = new APIDocumentationGenerator(manifest, {
+      title: manifest.name ?? 'Janus API',
       description: 'Comprehensive Janus with cross-platform support for Go, Rust, Swift, and TypeScript',
-      version: apiSpec.version,
+      version: manifest.version,
       includeExamples: true,
       includeTypes: true,
       logoUrl: '', // Optional: add your logo URL here
@@ -56,14 +56,14 @@ async function main() {
     // Generate additional formats
     console.log('📄 Generating additional formats...');
 
-    // Save OpenAPI spec separately
+    // Save OpenManifest separately
     await fs.writeFile(
       path.join(outputDir, 'swagger.json'),
-      JSON.stringify(docs.openApiSpec, null, 2)
+      JSON.stringify(docs.openManifest, null, 2)
     );
 
     // Create README for the generated docs
-    const readme = `# ${apiSpec.name} Documentation
+    const readme = `# ${manifest.name} Documentation
 
 This directory contains automatically generated documentation for the Janus.
 
@@ -73,13 +73,13 @@ This directory contains automatically generated documentation for the Janus.
 - \`styles.css\` - Styling for the documentation
 - \`script.js\` - Interactive functionality
 - \`openapi.json\` - OpenAPI/Swagger specification
-- \`swagger.json\` - Alternative OpenAPI specification
+- \`swagger.json\` - Alternative OpenManifest
 
 ## Usage
 
 1. **View Documentation**: Open \`index.html\` in a web browser
 2. **API Integration**: Use \`openapi.json\` with API tools like Postman or Insomnia
-3. **Development**: Import the OpenAPI spec into your development environment
+3. **Development**: Import the OpenManifest into your development environment
 
 ## Features
 
@@ -91,7 +91,7 @@ This directory contains automatically generated documentation for the Janus.
 
 ## Implementation Support
 
-This API specification is implemented in multiple languages:
+This Manifest is implemented in multiple languages:
 
 - **TypeScript/Node.js**: Production-ready implementation
 - **Go**: High-performance server implementation  
@@ -175,8 +175,8 @@ server.listen(PORT, () => {
     console.log(`   • index.html     - Main documentation page`);
     console.log(`   • styles.css     - Styling`);
     console.log(`   • script.js      - Interactive functionality`);
-    console.log(`   • openapi.json   - OpenAPI specification`);
-    console.log(`   • swagger.json   - Alternative OpenAPI spec`);
+    console.log(`   • openapi.json   - OpenManifest`);
+    console.log(`   • swagger.json   - Alternative OpenManifest`);
     console.log(`   • README.md      - Documentation guide`);
     console.log(`   • serve.js       - Local development server`);
     console.log('');
