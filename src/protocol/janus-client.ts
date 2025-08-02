@@ -7,8 +7,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { JanusClient as CoreJanusClient } from '../core/janus-client';
 import { 
   Manifest, 
-  SocketCommand, 
-  SocketResponse
+  JanusCommand, 
+  JanusResponse
 } from '../types/protocol';
 
 /**
@@ -95,12 +95,12 @@ export class JanusClient {
     command: string,
     args?: Record<string, any>,
     timeout?: number
-  ): Promise<SocketResponse> {
+  ): Promise<JanusResponse> {
     // Generate command ID
     const commandId = uuidv4();
 
     // Create socket command (reply_to will be handled by underlying client)
-    const socketCommand: SocketCommand = {
+    const janusCommand: JanusCommand = {
       id: commandId,
       channelId: this.channelId,
       command,
@@ -116,11 +116,11 @@ export class JanusClient {
 
     // Validate command against Manifest
     if (this.enableValidation && this.manifest) {
-      this.validateCommandAgainstSpec(this.manifest, socketCommand);
+      this.validateCommandAgainstSpec(this.manifest, janusCommand);
     }
 
     // Send datagram and wait for response
-    const response = await this.janusClient.sendCommand(socketCommand);
+    const response = await this.janusClient.sendCommand(janusCommand);
 
     // Validate response correlation
     if (response.commandId !== commandId) {
@@ -152,7 +152,7 @@ export class JanusClient {
     const commandId = uuidv4();
 
     // Create socket command (no reply_to field)
-    const socketCommand: SocketCommand = {
+    const janusCommand: JanusCommand = {
       id: commandId,
       channelId: this.channelId,
       command,
@@ -163,11 +163,11 @@ export class JanusClient {
 
     // Validate command against Manifest
     if (this.enableValidation && this.manifest) {
-      this.validateCommandAgainstSpec(this.manifest, socketCommand);
+      this.validateCommandAgainstSpec(this.manifest, janusCommand);
     }
 
     // Send datagram without waiting for response
-    await this.janusClient.sendCommandNoResponse(socketCommand);
+    await this.janusClient.sendCommandNoResponse(janusCommand);
   }
 
   /**
@@ -259,7 +259,7 @@ export class JanusClient {
    * Validate command against Manifest
    * Matches Swift validateCommandAgainstSpec method exactly
    */
-  private validateCommandAgainstSpec(spec: Manifest, command: SocketCommand): void {
+  private validateCommandAgainstSpec(spec: Manifest, command: JanusCommand): void {
     // Check if command is reserved (built-in commands should never be in Manifests)
     if (this.isBuiltinCommand(command.command)) {
       throw new JanusClientError(
@@ -319,9 +319,9 @@ export class JanusClient {
   }
 
   /**
-   * Get the Manifest
+   * Get the loaded Manifest
    */
-  public get manifest(): Manifest | undefined {
+  public getManifest(): Manifest | undefined {
     return this.manifest;
   }
 
@@ -381,12 +381,12 @@ export class JanusClient {
     command: string,
     args?: Record<string, any>,
     timeout?: number
-  ): Promise<SocketResponse> {
+  ): Promise<JanusResponse> {
     // Generate command ID
     const commandId = uuidv4();
 
     // Create socket command for built-in command
-    const socketCommand: SocketCommand = {
+    const janusCommand: JanusCommand = {
       id: commandId,
       channelId: this.channelId,
       command,
@@ -396,7 +396,7 @@ export class JanusClient {
     };
 
     // Send datagram and wait for response (no validation for built-in commands)
-    const response = await this.janusClient.sendCommand(socketCommand);
+    const response = await this.janusClient.sendCommand(janusCommand);
 
     // Validate response correlation
     if (response.commandId !== commandId) {

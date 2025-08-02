@@ -3,12 +3,14 @@
  * Tests all 9 server features for TypeScript implementation
  */
 
-import { JanusDatagramServer } from '../server/janus-datagram-server';
+import { JanusServer } from '../server/janus-server';
 import { JanusClient } from '../core/janus-client';
+
+// JanusServer is the current server implementation
 import * as fs from 'fs';
 
 describe('TypeScript Server Features Comprehensive Tests', () => {
-  let server: JanusDatagramServer;
+  let server: JanusServer;
   let client: JanusClient;
   const testSocketPath = '/tmp/janus_server_features_test.sock';
   const responseSocketPath = '/tmp/janus_client_response_test.sock';
@@ -22,7 +24,7 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
     });
 
     // Create server with test configuration
-    server = new JanusDatagramServer({
+    server = new JanusServer({
       socketPath: testSocketPath,
       defaultTimeout: 5.0,
       maxMessageSize: 64 * 1024,
@@ -336,7 +338,7 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
 
     it('should limit concurrent handlers', async () => {
       // Create server with low concurrency limit
-      const limitedServer = new JanusDatagramServer({
+      const limitedServer = new JanusServer({
         socketPath: `/tmp/limited_server_${Date.now()}.sock`,
         maxConcurrentHandlers: 1
       });
@@ -582,7 +584,7 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
       expect(fs.existsSync(testSocketPath)).toBe(true);
 
       // Server should clean it up on start
-      const cleanupServer = new JanusDatagramServer({
+      const cleanupServer = new JanusServer({
         socketPath: testSocketPath,
         cleanupOnStart: true
       });
@@ -596,7 +598,7 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
     });
 
     it('should clean up socket file on shutdown when configured', async () => {
-      const cleanupServer = new JanusDatagramServer({
+      const cleanupServer = new JanusServer({
         socketPath: testSocketPath,
         cleanupOnShutdown: true
       });
@@ -609,7 +611,7 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
     });
 
     it('should not clean up socket file when cleanup is disabled', async () => {
-      const noCleanupServer = new JanusDatagramServer({
+      const noCleanupServer = new JanusServer({
         socketPath: testSocketPath,
         cleanupOnStart: false,
         cleanupOnShutdown: false

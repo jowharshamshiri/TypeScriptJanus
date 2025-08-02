@@ -180,7 +180,7 @@ Test matrix includes:
 ### Core Types
 
 ```typescript
-interface SocketCommand {
+interface JanusCommand {
   id: string;              // UUID v4
   channelId: string;       // Channel identifier
   command: string;         // Command name
@@ -189,7 +189,7 @@ interface SocketCommand {
   timestamp: string;       // ISO 8601 timestamp
 }
 
-interface SocketResponse {
+interface JanusResponse {
   commandId: string;       // Correlates to command.id
   channelId: string;       // Channel verification
   success: boolean;        // Success/failure flag

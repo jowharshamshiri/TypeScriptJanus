@@ -1,37 +1,27 @@
 /**
- * Unix Socket Server for Janus Protocol
- * Implements command handling and response management
+ * Unix Datagram Server for Janus Protocol
+ * Implements SOCK_DGRAM connectionless server with command handling
  */
 
-import * as net from 'net';
+import * as unixDgram from 'unix-dgram';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
-import { SocketCommand, SocketResponse, CommandHandler, CommandHandlerRegistry } from '../types/protocol';
-import { MessageFraming, MessageFramingError } from '../core/message-framing';
+import { JanusCommand, JanusResponse } from '../types/protocol';
 import { SecurityValidator } from '../core/security-validator';
+import { JSONRPCErrorBuilder, JSONRPCErrorCode } from '../types/jsonrpc-error';
 
 export interface JanusServerEvents {
   'listening': () => void;
-  'connection': (clientId: string) => void;
-  'disconnection': (clientId: string) => void;
-  'command': (command: SocketCommand, clientId: string) => void;
-  'response': (response: SocketResponse, clientId: string) => void;
+  'command': (command: JanusCommand, clientAddress?: string) => void;
+  'response': (response: JanusResponse, clientAddress?: string) => void;
   'error': (error: Error) => void;
+  'clientActivity': (clientAddress: string, timestamp: Date) => void;
 }
 
-export class JanusServerError extends Error {
-  constructor(message: string, public code: string, public details?: string) {
-    super(message);
-    this.name = 'JanusServerError';
-  }
-}
-
-export interface ServerConfig {
+export interface DatagramServerConfig {
   /** Unix socket path */
   socketPath: string;
-  
-  /** Maximum concurrent connections */
-  maxConnections?: number;
   
   /** Default command timeout in seconds */
   defaultTimeout?: number;
@@ -44,35 +34,46 @@ export interface ServerConfig {
   
   /** Whether to cleanup socket file on shutdown */
   cleanupOnShutdown?: boolean;
+
+  /** Maximum concurrent handlers */
+  maxConcurrentHandlers?: number;
 }
 
-interface ClientConnection {
-  id: string;
-  socket: net.Socket;
-  messageBuffer: Buffer;
-  createdAt: Date;
+interface ClientActivity {
+  address: string;
   lastActivity: Date;
+  commandCount: number;
+}
+
+export type CommandHandler = (args: any) => Promise<any> | any;
+
+export class JanusServerError extends Error {
+  constructor(message: string, public code: string, public details?: string) {
+    super(message);
+    this.name = 'JanusServerError';
+  }
 }
 
 export class JanusServer extends EventEmitter {
-  private server: net.Server | null = null;
-  private config: Required<ServerConfig>;
+  private socket: any = null;
+  private config: Required<DatagramServerConfig>;
   private validator: SecurityValidator;
-  private commandHandlers: CommandHandlerRegistry = {};
-  private clients = new Map<string, ClientConnection>();
+  private commandHandlers = new Map<string, Map<string, CommandHandler>>();
+  private clientActivity = new Map<string, ClientActivity>();
   private listening = false;
-  private clientIdCounter = 0;
+  private activeHandlers = 0;
+  private shutdownInProgress = false;
 
-  constructor(config: ServerConfig) {
+  constructor(config: DatagramServerConfig) {
     super();
     
     this.config = {
       socketPath: config.socketPath,
-      maxConnections: config.maxConnections ?? 100,
       defaultTimeout: config.defaultTimeout ?? 30.0,
-      maxMessageSize: config.maxMessageSize ?? 10 * 1024 * 1024,
+      maxMessageSize: config.maxMessageSize ?? 64 * 1024, // 64KB datagram limit
       cleanupOnStart: config.cleanupOnStart ?? true,
-      cleanupOnShutdown: config.cleanupOnShutdown ?? true
+      cleanupOnShutdown: config.cleanupOnShutdown ?? true,
+      maxConcurrentHandlers: config.maxConcurrentHandlers ?? 100
     };
     
     this.validator = new SecurityValidator({
@@ -82,462 +83,473 @@ export class JanusServer extends EventEmitter {
     // Validate socket path
     const pathValidation = this.validator.validateSocketPath(this.config.socketPath);
     if (!pathValidation.valid) {
-      throw new JanusServerError(
-        pathValidation.error!,
-        pathValidation.code!,
-        pathValidation.details
-      );
+      throw new Error(`Invalid socket path: ${pathValidation.details}`);
     }
   }
 
   /**
    * Register a command handler for a specific channel and command
+   * Command Handler Registry feature
    */
   registerCommandHandler(channelId: string, commandName: string, handler: CommandHandler): void {
     // Validate inputs
     const channelValidation = this.validator.validateName(channelId, 'channel');
     if (!channelValidation.valid) {
-      throw new JanusServerError(
-        channelValidation.error!,
-        channelValidation.code!,
-        channelValidation.details
-      );
+      throw new Error(`Invalid channel ID: ${channelValidation.details}`);
     }
 
     const commandValidation = this.validator.validateName(commandName, 'command');
     if (!commandValidation.valid) {
-      throw new JanusServerError(
-        commandValidation.error!,
-        commandValidation.code!,
-        commandValidation.details
-      );
+      throw new Error(`Invalid command name: ${commandValidation.details}`);
     }
 
-    if (!this.commandHandlers[channelId]) {
-      this.commandHandlers[channelId] = {};
+    if (!this.commandHandlers.has(channelId)) {
+      this.commandHandlers.set(channelId, new Map());
     }
-    
-    this.commandHandlers[channelId][commandName] = handler;
+
+    this.commandHandlers.get(channelId)!.set(commandName, handler);
   }
 
   /**
    * Unregister a command handler
    */
   unregisterCommandHandler(channelId: string, commandName: string): boolean {
-    if (!this.commandHandlers[channelId] || !this.commandHandlers[channelId][commandName]) {
-      return false;
+    const channelHandlers = this.commandHandlers.get(channelId);
+    if (channelHandlers) {
+      return channelHandlers.delete(commandName);
     }
-    
-    delete this.commandHandlers[channelId][commandName];
-    
-    // Clean up empty channel
-    if (Object.keys(this.commandHandlers[channelId]).length === 0) {
-      delete this.commandHandlers[channelId];
-    }
-    
-    return true;
+    return false;
   }
 
   /**
-   * Get all registered command handlers
+   * Get all registered handlers for a channel
    */
-  getCommandHandlers(): CommandHandlerRegistry {
-    return JSON.parse(JSON.stringify(this.commandHandlers)); // Deep copy
+  getChannelHandlers(channelId: string): Map<string, CommandHandler> | undefined {
+    return this.commandHandlers.get(channelId);
   }
 
   /**
-   * Start listening for connections
+   * Start the datagram server
+   * Connection Processing Loop feature
    */
-  async startListening(): Promise<void> {
+  async listen(): Promise<void> {
     if (this.listening) {
-      return;
-    }
-
-    // Cleanup existing socket file if configured
-    if (this.config.cleanupOnStart) {
-      await this.cleanupSocketFile();
+      throw new Error('Server is already listening');
     }
 
     return new Promise((resolve, reject) => {
-      this.server = net.createServer();
-      
-      this.server.on('connection', (socket) => {
-        this.handleNewConnection(socket);
-      });
-      
-      this.server.on('error', (error) => {
-        this.emit('error', new JanusServerError(
-          'Server error',
-          'SERVER_ERROR',
-          error.message
-        ));
-        reject(error);
-      });
-      
-      this.server.on('listening', () => {
+      try {
+        // Clean up existing socket file if requested
+        if (this.config.cleanupOnStart && fs.existsSync(this.config.socketPath)) {
+          fs.unlinkSync(this.config.socketPath);
+        }
+
+        // Create Unix domain datagram socket
+        this.socket = unixDgram.createSocket('unix_dgram');
+
+        // Set up message handler - this is the main event loop
+        this.socket.on('message', (data: Buffer, rinfo: any) => {
+          this.handleIncomingMessage(data, rinfo);
+        });
+
+        // Error handling
+        this.socket.on('error', (error: Error) => {
+          this.emit('error', error);
+        });
+
+        // Bind to Unix socket path
+        this.socket.bind(this.config.socketPath);
+        
         this.listening = true;
         this.emit('listening');
         resolve();
-      });
-      
-      // Configure server limits
-      this.server.maxConnections = this.config.maxConnections;
-      
-      this.server.listen(this.config.socketPath);
+
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
   /**
-   * Stop listening and close all connections
+   * Handle incoming datagram message
+   * Main server event loop processing
    */
-  async stopListening(): Promise<void> {
-    if (!this.listening || !this.server) {
+  private async handleIncomingMessage(data: Buffer, rinfo: any): Promise<void> {
+    if (this.shutdownInProgress) {
       return;
     }
 
-    return new Promise((resolve) => {
-      // Close all client connections
-      for (const client of this.clients.values()) {
-        client.socket.end();
-      }
-      this.clients.clear();
+    const clientAddress = rinfo?.address || 'unknown';
+    
+    try {
+      // Track client activity
+      this.trackClientActivity(clientAddress);
 
-      this.server!.close(async () => {
-        this.listening = false;
-        this.server = null;
-        
-        // Cleanup socket file if configured
-        if (this.config.cleanupOnShutdown) {
-          await this.cleanupSocketFile();
-        }
-        
-        resolve();
-      });
-    });
+      // Parse incoming command
+      const command: JanusCommand = JSON.parse(data.toString());
+      
+      // Validate command structure
+      if (!this.isValidJanusCommand(command)) {
+        await this.sendErrorResponse(
+          (command as any).reply_to || '',
+          (command as any).id || crypto.randomUUID(),
+          JSONRPCErrorBuilder.create(JSONRPCErrorCode.INVALID_REQUEST, 'Invalid command structure')
+        );
+        return;
+      }
+
+      this.emit('command', command, clientAddress);
+
+      // Execute command with timeout management
+      await this.executeCommandWithTimeout(command, clientAddress);
+
+    } catch (error) {
+      // Error Response Generation feature
+      const errorResponse = this.generateErrorResponse(
+        error,
+        'unknown'
+      );
+      
+      await this.sendResponse(errorResponse);
+      
+      this.emit('error', error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   /**
-   * Send a response to a specific client
+   * Track client activity for Multi-Client Connection Management
    */
-  async sendResponse(clientId: string, response: SocketResponse): Promise<void> {
-    const client = this.clients.get(clientId);
-    if (!client) {
-      throw new JanusServerError(
-        'Client not found',
-        'CLIENT_NOT_FOUND',
-        `No client with ID ${clientId}`
-      );
+  private trackClientActivity(clientAddress: string): void {
+    const now = new Date();
+    const existing = this.clientActivity.get(clientAddress);
+    
+    if (existing) {
+      existing.lastActivity = now;
+      existing.commandCount++;
+    } else {
+      this.clientActivity.set(clientAddress, {
+        address: clientAddress,
+        lastActivity: now,
+        commandCount: 1
+      });
     }
 
-    // Validate response
-    const responseValidation = this.validator.validateResponse(response);
-    if (!responseValidation.valid) {
-      throw new JanusServerError(
-        responseValidation.error!,
-        responseValidation.code!,
-        responseValidation.details
+    this.emit('clientActivity', clientAddress, now);
+  }
+
+  /**
+   * Execute command with timeout management
+   * Command Execution with Timeout feature
+   */
+  private async executeCommandWithTimeout(command: JanusCommand, clientAddress: string): Promise<void> {
+    if (this.activeHandlers >= this.config.maxConcurrentHandlers) {
+      await this.sendErrorResponse(
+        command.reply_to || '',
+        command.id,
+        JSONRPCErrorBuilder.create(JSONRPCErrorCode.RESOURCE_LIMIT_EXCEEDED, 'Too many concurrent handlers')
       );
+      return;
     }
+
+    this.activeHandlers++;
 
     try {
-      const encoded = MessageFraming.encodeMessage(response);
-      
-      return new Promise((resolve, reject) => {
-        client.socket.write(encoded, (error) => {
-          if (error) {
-            reject(new JanusServerError(
-              'Failed to send response',
-              'SEND_ERROR',
-              error.message
-            ));
-          } else {
-            client.lastActivity = new Date();
-            this.emit('response', response, clientId);
-            resolve();
-          }
-        });
+      const timeout = command.timeout || this.config.defaultTimeout;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Command timeout after ${timeout}s`));
+        }, timeout * 1000);
       });
+
+      const executionPromise = this.executeCommand(command);
+      
+      const result = await Promise.race([executionPromise, timeoutPromise]);
+      
+      // Send successful response
+      if (command.reply_to) {
+        const response: JanusResponse = {
+          commandId: command.id,
+          channelId: command.channelId,
+          success: true,
+          result: result,
+          timestamp: Date.now()
+        };
+        
+        await this.sendResponse(response, command.reply_to);
+        this.emit('response', response, clientAddress);
+      }
+
     } catch (error) {
-      if (error instanceof MessageFramingError) {
-        throw new JanusServerError(
-          'Response encoding failed',
-          error.code,
-          error.message
+      // Send error response
+      if (command.reply_to) {
+        const errorCode = error instanceof Error && error.message.includes('timeout') 
+          ? JSONRPCErrorCode.HANDLER_TIMEOUT 
+          : JSONRPCErrorCode.INTERNAL_ERROR;
+          
+        await this.sendErrorResponse(
+          command.reply_to,
+          command.id,
+          JSONRPCErrorBuilder.create(errorCode, error instanceof Error ? error.message : String(error))
         );
       }
-      throw error;
+    } finally {
+      this.activeHandlers--;
     }
   }
 
   /**
-   * Get server status
+   * Execute a command by finding and calling the appropriate handler
    */
-  isListening(): boolean {
-    return this.listening;
+  private async executeCommand(command: JanusCommand): Promise<any> {
+    const channelHandlers = this.commandHandlers.get(command.channelId);
+    if (!channelHandlers) {
+      throw new Error(`Channel '${command.channelId}' not found`);
+    }
+
+    const handler = channelHandlers.get(command.command);
+    if (!handler) {
+      // Check for built-in commands
+      const builtinResult = await this.handleBuiltinCommand(command);
+      if (builtinResult !== null) {
+        return builtinResult;
+      }
+      
+      throw new Error(`Command '${command.command}' not found in channel '${command.channelId}'`);
+    }
+
+    // Execute handler
+    return await handler(command.args || {});
   }
 
   /**
-   * Get connected clients count
+   * Handle built-in commands (ping, echo, get_info, spec, etc.)
    */
-  getClientCount(): number {
-    return this.clients.size;
+  private async handleBuiltinCommand(command: JanusCommand): Promise<any> {
+    switch (command.command) {
+      case 'ping':
+        return { message: 'pong', timestamp: Date.now() };
+        
+      case 'echo':
+        return { message: command.args?.message || 'echo', timestamp: Date.now() };
+        
+      case 'get_info':
+        return {
+          server: 'TypeScript Janus Datagram Server',
+          version: '1.0.0',
+          timestamp: Date.now(),
+          activeHandlers: this.activeHandlers,
+          activeClients: this.clientActivity.size
+        };
+        
+      case 'spec':
+        return {
+          specification: this.generateServerSpecification()
+        };
+        
+      default:
+        return null; // Not a built-in command
+    }
   }
 
   /**
-   * Get client information
+   * Generate server specification for spec command
    */
-  getClientInfo(clientId: string): { id: string; createdAt: Date; lastActivity: Date } | null {
-    const client = this.clients.get(clientId);
-    if (!client) {
-      return null;
+  private generateServerSpecification(): any {
+    const channels: any = {};
+    
+    for (const [channelId, handlers] of this.commandHandlers) {
+      const commands: any = {};
+      for (const [commandName] of handlers) {
+        commands[commandName] = {
+          description: `Handler for ${commandName} command`,
+          arguments: {},
+          response: {}
+        };
+      }
+      
+      channels[channelId] = {
+        description: `Channel ${channelId}`,
+        commands: commands
+      };
     }
     
     return {
-      id: client.id,
-      createdAt: client.createdAt,
-      lastActivity: client.lastActivity
+      version: '1.0.0',
+      channels: channels,
+      models: {}
     };
   }
 
   /**
-   * Handle new client connection
+   * Send response datagram
    */
-  private handleNewConnection(socket: net.Socket): void {
-    const clientId = `client-${++this.clientIdCounter}`;
-    
-    const client: ClientConnection = {
-      id: clientId,
-      socket,
-      messageBuffer: Buffer.alloc(0),
-      createdAt: new Date(),
-      lastActivity: new Date()
-    };
-    
-    this.clients.set(clientId, client);
-    this.emit('connection', clientId);
-    
-    // Setup socket handlers
-    socket.on('data', (data) => {
-      this.handleClientData(clientId, data);
-    });
-    
-    socket.on('error', (error) => {
-      this.emit('error', new JanusServerError(
-        'Client socket error',
-        'CLIENT_SOCKET_ERROR',
-        `Client ${clientId}: ${error.message}`
-      ));
-    });
-    
-    socket.on('close', () => {
-      this.handleClientDisconnection(clientId);
-    });
-    
-    socket.on('end', () => {
-      this.handleClientDisconnection(clientId);
-    });
-  }
-
-  /**
-   * Handle data from a client
-   */
-  private handleClientData(clientId: string, data: Buffer): void {
-    const client = this.clients.get(clientId);
-    if (!client) {
+  private async sendResponse(response: JanusResponse, replyTo?: string): Promise<void> {
+    const targetPath = replyTo;
+    if (!targetPath) {
       return;
     }
 
-    try {
-      // Update activity timestamp
-      client.lastActivity = new Date();
-      
-      // Append to message buffer
-      client.messageBuffer = Buffer.concat([client.messageBuffer, data]);
-      
-      // Extract complete messages
-      const result = MessageFraming.extractMessages(client.messageBuffer);
-      client.messageBuffer = result.remainingBuffer;
-      
-      // Process each message
-      for (const message of result.messages) {
-        this.handleClientMessage(clientId, message);
-      }
-    } catch (error) {
-      this.emit('error', new JanusServerError(
-        'Message processing failed',
-        'MESSAGE_PROCESSING_ERROR',
-        `Client ${clientId}: ${error instanceof Error ? error.message : String(error)}`
-      ));
-    }
-  }
-
-  /**
-   * Handle a message from a client
-   */
-  private async handleClientMessage(clientId: string, message: SocketCommand | SocketResponse): Promise<void> {
-    // Only handle commands (responses would be for clients acting as servers)
-    if ('id' in message) {
-      await this.handleCommand(clientId, message);
-    }
-  }
-
-  /**
-   * Handle a command from a client
-   */
-  private async handleCommand(clientId: string, command: SocketCommand): Promise<void> {
-    this.emit('command', command, clientId);
-    
-    // Validate command
-    const commandValidation = this.validator.validateCommand(command);
-    if (!commandValidation.valid) {
-      await this.sendErrorResponse(clientId, command, 'VALIDATION_FAILED', commandValidation.error!, commandValidation.details);
-      return;
-    }
-
-    // Find handler
-    const handler = this.commandHandlers[command.channelId]?.[command.command];
-    if (!handler) {
-      await this.sendErrorResponse(clientId, command, 'HANDLER_NOT_FOUND', `No handler for ${command.channelId}.${command.command}`);
-      return;
-    }
-
-    // Add arguments based on command type (matches Go/Rust/Swift implementation)
-    const enhancedArgs = { ...(command.args ?? {}) };
-    const commandsNeedingMessage = ['echo', 'get_info', 'validate', 'slow_process'];
-    if (commandsNeedingMessage.includes(command.command)) {
-      // These commands need a "message" argument - add default if not present
-      if (!enhancedArgs.message) {
-        enhancedArgs.message = 'test message';
-      }
-    }
-    // spec and ping commands don't need message arguments
-
-    // Execute handler with timeout
-    const timeout = command.timeout ?? this.config.defaultTimeout;
-    
-    try {
-      const result = await this.executeWithTimeout(handler, enhancedArgs, timeout);
-      
-      const response: SocketResponse = {
-        commandId: command.id,
-        channelId: command.channelId,
-        success: true,
-        result: result as Record<string, any>,
-        timestamp: Date.now() / 1000
-      };
-      
-      await this.sendResponse(clientId, response);
-    } catch (error) {
-      let errorCode = 'HANDLER_ERROR';
-      let errorMessage = 'Command execution failed';
-      let errorDetails: string | undefined;
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-        if (error.name === 'TimeoutError') {
-          errorCode = 'HANDLER_TIMEOUT';
-        }
-        errorDetails = error.stack;
-      }
-      
-      await this.sendErrorResponse(clientId, command, errorCode, errorMessage, errorDetails);
-    }
-  }
-
-  /**
-   * Send an error response
-   */
-  private async sendErrorResponse(
-    clientId: string,
-    command: SocketCommand,
-    errorCode: string,
-    errorMessage: string,
-    errorDetails?: string
-  ): Promise<void> {
-    const errorResponse: SocketResponse = {
-      commandId: command.id,
-      channelId: command.channelId,
-      success: false,
-      error: {
-        code: typeof errorCode === 'string' ? -32000 : errorCode,
-        message: errorMessage,
-        ...(errorDetails && { data: { details: errorDetails } })
-      },
-      timestamp: Date.now() / 1000
-    };
-    
-    try {
-      await this.sendResponse(clientId, errorResponse);
-    } catch (sendError) {
-      this.emit('error', new JanusServerError(
-        'Failed to send error response',
-        'ERROR_RESPONSE_FAILED',
-        `Client ${clientId}: ${sendError instanceof Error ? sendError.message : String(sendError)}`
-      ));
-    }
-  }
-
-  /**
-   * Execute handler with timeout
-   */
-  private async executeWithTimeout<T>(
-    handler: CommandHandler,
-    args: Record<string, any>,
-    timeoutSeconds: number
-  ): Promise<T> {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const error = new Error(`Handler execution timed out after ${timeoutSeconds} seconds`);
-        error.name = 'TimeoutError';
-        reject(error);
-      }, timeoutSeconds * 1000);
+      const responseData = Buffer.from(JSON.stringify(response));
+      
+      if (responseData.length > this.config.maxMessageSize) {
+        reject(new Error(`Response too large: ${responseData.length} bytes`));
+        return;
+      }
 
-      Promise.resolve(handler(args))
-        .then((result) => {
-          clearTimeout(timer);
-          resolve(result as T);
-        })
-        .catch((error) => {
-          clearTimeout(timer);
-          reject(error);
-        });
+      const clientSocket = unixDgram.createSocket('unix_dgram');
+      clientSocket.send(responseData, 0, responseData.length, targetPath, (err: Error | null) => {
+        clientSocket.close();
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
     });
   }
 
   /**
-   * Handle client disconnection
+   * Send error response
+   * Error Response Generation feature
    */
-  private handleClientDisconnection(clientId: string): void {
-    const client = this.clients.get(clientId);
-    if (client) {
-      this.clients.delete(clientId);
-      this.emit('disconnection', clientId);
+  private async sendErrorResponse(replyTo: string, commandId: string, error: any): Promise<void> {
+    if (!replyTo) return;
+
+    const errorResponse: JanusResponse = {
+      commandId: commandId,
+      channelId: 'unknown',
+      success: false,
+      error: error,
+      timestamp: Date.now()
+    };
+
+    try {
+      await this.sendResponse(errorResponse, replyTo);
+    } catch (sendError) {
+      this.emit('error', sendError instanceof Error ? sendError : new Error(String(sendError)));
     }
   }
 
   /**
-   * Cleanup socket file
+   * Generate standardized error response
    */
-  private async cleanupSocketFile(): Promise<void> {
-    try {
-      await fs.promises.unlink(this.config.socketPath);
-    } catch (error) {
-      // Ignore errors (file might not exist)
+  private generateErrorResponse(error: any, commandId: string): JanusResponse {
+    let jsonrpcError;
+    
+    if (error instanceof Error) {
+      if (error.message.includes('timeout')) {
+        jsonrpcError = JSONRPCErrorBuilder.create(JSONRPCErrorCode.HANDLER_TIMEOUT, error.message);
+      } else if (error.message.includes('not found')) {
+        jsonrpcError = JSONRPCErrorBuilder.create(JSONRPCErrorCode.METHOD_NOT_FOUND, error.message);
+      } else {
+        jsonrpcError = JSONRPCErrorBuilder.create(JSONRPCErrorCode.INTERNAL_ERROR, error.message);
+      }
+    } else {
+      jsonrpcError = JSONRPCErrorBuilder.create(JSONRPCErrorCode.INTERNAL_ERROR, String(error));
+    }
+
+    return {
+      commandId: commandId,
+      channelId: 'unknown',
+      success: false,
+      error: jsonrpcError,
+      timestamp: Date.now()
+    };
+  }
+
+  /**
+   * Validate socket command structure
+   */
+  private isValidJanusCommand(command: any): command is JanusCommand {
+    return (
+      typeof command === 'object' &&
+      command !== null &&
+      typeof command.id === 'string' &&
+      typeof command.channelId === 'string' &&
+      typeof command.command === 'string' &&
+      typeof command.timestamp === 'number'
+    );
+  }
+
+  /**
+   * Get client activity information
+   * Client Activity Tracking feature
+   */
+  getClientActivity(): ClientActivity[] {
+    return Array.from(this.clientActivity.values());
+  }
+
+  /**
+   * Clean up inactive clients
+   */
+  cleanupInactiveClients(maxInactiveMs: number = 300000): void { // 5 minutes
+    const now = new Date();
+    for (const [address, activity] of this.clientActivity) {
+      if (now.getTime() - activity.lastActivity.getTime() > maxInactiveMs) {
+        this.clientActivity.delete(address);
+      }
     }
   }
 
-  // Event emitter type safety
-  override on<K extends keyof JanusServerEvents>(
-    event: K,
-    listener: JanusServerEvents[K]
-  ): this {
-    return super.on(event, listener);
+  /**
+   * Get server statistics
+   */
+  getServerStats(): any {
+    return {
+      listening: this.listening,
+      activeHandlers: this.activeHandlers,
+      totalClients: this.clientActivity.size,
+      totalChannels: this.commandHandlers.size,
+      socketPath: this.config.socketPath
+    };
   }
 
-  override emit<K extends keyof JanusServerEvents>(
-    event: K,
-    ...args: Parameters<JanusServerEvents[K]>
-  ): boolean {
-    return super.emit(event, ...args);
+  /**
+   * Stop the server gracefully
+   * Graceful Shutdown feature
+   */
+  async close(): Promise<void> {
+    if (!this.listening) {
+      return;
+    }
+
+    this.shutdownInProgress = true;
+
+    // Wait for active handlers to complete (with timeout)
+    const maxWaitTime = 30000; // 30 seconds
+    const startTime = Date.now();
+    
+    while (this.activeHandlers > 0 && (Date.now() - startTime) < maxWaitTime) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    return new Promise((resolve) => {
+      if (this.socket) {
+        this.socket.close(() => {
+          this.listening = false;
+          
+          // Socket File Cleanup feature
+          if (this.config.cleanupOnShutdown && fs.existsSync(this.config.socketPath)) {
+            try {
+              fs.unlinkSync(this.config.socketPath);
+            } catch (error) {
+              // Ignore cleanup errors
+            }
+          }
+          
+          resolve();
+        });
+      } else {
+        resolve();
+      }
+    });
+  }
+
+  /**
+   * Check if server is listening
+   */
+  isListening(): boolean {
+    return this.listening;
   }
 }

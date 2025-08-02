@@ -4,11 +4,11 @@
  */
 
 import { EventEmitter } from 'events';
-import { SocketResponse, PendingCommand } from '../types/protocol';
+import { JanusResponse, PendingCommand } from '../types/protocol';
 
 export interface ResponseTrackerEvents {
   'timeout': (commandId: string) => void;
-  'response': (commandId: string, response: SocketResponse) => void;
+  'response': (commandId: string, response: JanusResponse) => void;
   'cleanup': (commandId: string) => void;
 }
 
@@ -52,7 +52,7 @@ export class ResponseTracker extends EventEmitter {
    */
   trackCommand(
     commandId: string,
-    resolve: (response: SocketResponse) => void,
+    resolve: (response: JanusResponse) => void,
     reject: (error: Error) => void,
     timeout: number = this.config.defaultTimeout
   ): void {
@@ -95,7 +95,7 @@ export class ResponseTracker extends EventEmitter {
   /**
    * Handle an incoming response
    */
-  handleResponse(response: SocketResponse): boolean {
+  handleResponse(response: JanusResponse): boolean {
     const pending = this.pendingCommands.get(response.commandId);
     
     if (!pending) {
@@ -230,7 +230,7 @@ export class ResponseTracker extends EventEmitter {
    */
   trackCommandWithErrorHandling(
     commandId: string,
-    resolve: (response: SocketResponse) => void,
+    resolve: (response: JanusResponse) => void,
     reject: (error: Error) => void,
     onError: (error: Error) => void,
     timeout: number = this.config.defaultTimeout
@@ -264,9 +264,9 @@ export class ResponseTracker extends EventEmitter {
    */
   trackBilateralTimeout(
     baseCommandId: string,
-    requestResolve: (response: SocketResponse) => void,
+    requestResolve: (response: JanusResponse) => void,
     requestReject: (error: Error) => void,
-    responseResolve: (response: SocketResponse) => void,
+    responseResolve: (response: JanusResponse) => void,
     responseReject: (error: Error) => void,
     requestTimeout: number = this.config.defaultTimeout,
     responseTimeout: number = this.config.defaultTimeout

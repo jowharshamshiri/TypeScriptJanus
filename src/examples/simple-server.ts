@@ -43,7 +43,6 @@ async function main() {
   // Create server
   const server = new JanusServer({
     socketPath: SOCKET_PATH,
-    maxConnections: 10,
     defaultTimeout: 30.0,
     cleanupOnStart: true,
     cleanupOnShutdown: true
@@ -57,7 +56,7 @@ async function main() {
 
   // Start listening
   try {
-    await server.startListening();
+    await server.listen();
     console.log('✅ Server is listening for connections');
     console.log('💡 Test with: npm run client');
   } catch (error) {
@@ -244,7 +243,7 @@ function setupGracefulShutdown(server: JanusServer) {
     console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
     
     try {
-      await server.stopListening();
+      await server.close();
       console.log('✅ Server stopped successfully');
       process.exit(0);
     } catch (error) {

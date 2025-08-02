@@ -23,8 +23,8 @@ export { JanusClient, JanusClientError } from './protocol/janus-client';
 
 // Re-export commonly used types for convenience
 export type {
-  SocketCommand,
-  SocketResponse,
+  JanusCommand,
+  JanusResponse,
   PendingCommand,
   ConnectionConfig,
   SecurityConfig,

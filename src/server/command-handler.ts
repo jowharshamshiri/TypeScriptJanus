@@ -3,7 +3,7 @@
  * Supports direct value responses and native Promise-based async patterns
  */
 
-import { SocketCommand } from '../types/protocol';
+import { JanusCommand } from '../types/protocol';
 import { JSONRPCError, JSONRPCErrorCode, JSONRPCErrorBuilder } from '../types/jsonrpc-error';
 
 /// Result of a handler execution with type safety
@@ -46,23 +46,23 @@ export namespace HandlerResult {
 
 /// Enhanced command handler interface for direct value responses
 export interface CommandHandler<T = any> {
-  handle(command: SocketCommand): Promise<HandlerResult<T>>;
+  handle(command: JanusCommand): Promise<HandlerResult<T>>;
 }
 
 /// Synchronous handler wrapper for direct value responses
 export class SyncHandler<T> implements CommandHandler<T> {
-  constructor(private handler: (command: SocketCommand) => HandlerResult<T>) {}
+  constructor(private handler: (command: JanusCommand) => HandlerResult<T>) {}
   
-  async handle(command: SocketCommand): Promise<HandlerResult<T>> {
+  async handle(command: JanusCommand): Promise<HandlerResult<T>> {
     return this.handler(command);
   }
 }
 
 /// Asynchronous handler wrapper for direct value responses
 export class AsyncHandler<T> implements CommandHandler<T> {
-  constructor(private handler: (command: SocketCommand) => Promise<HandlerResult<T>>) {}
+  constructor(private handler: (command: JanusCommand) => Promise<HandlerResult<T>>) {}
   
-  async handle(command: SocketCommand): Promise<HandlerResult<T>> {
+  async handle(command: JanusCommand): Promise<HandlerResult<T>> {
     return await this.handler(command);
   }
 }
@@ -70,7 +70,7 @@ export class AsyncHandler<T> implements CommandHandler<T> {
 // Direct Value Handler Constructors
 
 /// Create a boolean handler
-export function boolHandler(handler: (command: SocketCommand) => boolean | Promise<boolean>): CommandHandler<boolean> {
+export function boolHandler(handler: (command: JanusCommand) => boolean | Promise<boolean>): CommandHandler<boolean> {
   return new AsyncHandler(async (command) => {
     try {
       const result = await handler(command);
@@ -82,7 +82,7 @@ export function boolHandler(handler: (command: SocketCommand) => boolean | Promi
 }
 
 /// Create a string handler
-export function stringHandler(handler: (command: SocketCommand) => string | Promise<string>): CommandHandler<string> {
+export function stringHandler(handler: (command: JanusCommand) => string | Promise<string>): CommandHandler<string> {
   return new AsyncHandler(async (command) => {
     try {
       const result = await handler(command);
@@ -94,7 +94,7 @@ export function stringHandler(handler: (command: SocketCommand) => string | Prom
 }
 
 /// Create a number handler
-export function numberHandler(handler: (command: SocketCommand) => number | Promise<number>): CommandHandler<number> {
+export function numberHandler(handler: (command: JanusCommand) => number | Promise<number>): CommandHandler<number> {
   return new AsyncHandler(async (command) => {
     try {
       const result = await handler(command);
@@ -106,7 +106,7 @@ export function numberHandler(handler: (command: SocketCommand) => number | Prom
 }
 
 /// Create an array handler
-export function arrayHandler<T>(handler: (command: SocketCommand) => T[] | Promise<T[]>): CommandHandler<T[]> {
+export function arrayHandler<T>(handler: (command: JanusCommand) => T[] | Promise<T[]>): CommandHandler<T[]> {
   return new AsyncHandler(async (command) => {
     try {
       const result = await handler(command);
@@ -118,7 +118,7 @@ export function arrayHandler<T>(handler: (command: SocketCommand) => T[] | Promi
 }
 
 /// Create an object handler
-export function objectHandler<T extends Record<string, any>>(handler: (command: SocketCommand) => T | Promise<T>): CommandHandler<T> {
+export function objectHandler<T extends Record<string, any>>(handler: (command: JanusCommand) => T | Promise<T>): CommandHandler<T> {
   return new AsyncHandler(async (command) => {
     try {
       const result = await handler(command);
@@ -130,7 +130,7 @@ export function objectHandler<T extends Record<string, any>>(handler: (command: 
 }
 
 /// Create a custom type handler
-export function customHandler<T>(handler: (command: SocketCommand) => T | Promise<T>): CommandHandler<T> {
+export function customHandler<T>(handler: (command: JanusCommand) => T | Promise<T>): CommandHandler<T> {
   return new AsyncHandler(async (command) => {
     try {
       const result = await handler(command);
@@ -144,42 +144,42 @@ export function customHandler<T>(handler: (command: SocketCommand) => T | Promis
 // Async Handler Constructors (explicit Promise-based)
 
 /// Create an async boolean handler
-export function asyncBoolHandler(handler: (command: SocketCommand) => Promise<boolean>): CommandHandler<boolean> {
+export function asyncBoolHandler(handler: (command: JanusCommand) => Promise<boolean>): CommandHandler<boolean> {
   return new AsyncHandler(async (command) => {
     return HandlerResult.fromPromise(handler(command));
   });
 }
 
 /// Create an async string handler
-export function asyncStringHandler(handler: (command: SocketCommand) => Promise<string>): CommandHandler<string> {
+export function asyncStringHandler(handler: (command: JanusCommand) => Promise<string>): CommandHandler<string> {
   return new AsyncHandler(async (command) => {
     return HandlerResult.fromPromise(handler(command));
   });
 }
 
 /// Create an async number handler
-export function asyncNumberHandler(handler: (command: SocketCommand) => Promise<number>): CommandHandler<number> {
+export function asyncNumberHandler(handler: (command: JanusCommand) => Promise<number>): CommandHandler<number> {
   return new AsyncHandler(async (command) => {
     return HandlerResult.fromPromise(handler(command));
   });
 }
 
 /// Create an async array handler
-export function asyncArrayHandler<T>(handler: (command: SocketCommand) => Promise<T[]>): CommandHandler<T[]> {
+export function asyncArrayHandler<T>(handler: (command: JanusCommand) => Promise<T[]>): CommandHandler<T[]> {
   return new AsyncHandler(async (command) => {
     return HandlerResult.fromPromise(handler(command));
   });
 }
 
 /// Create an async object handler
-export function asyncObjectHandler<T extends Record<string, any>>(handler: (command: SocketCommand) => Promise<T>): CommandHandler<T> {
+export function asyncObjectHandler<T extends Record<string, any>>(handler: (command: JanusCommand) => Promise<T>): CommandHandler<T> {
   return new AsyncHandler(async (command) => {
     return HandlerResult.fromPromise(handler(command));
   });
 }
 
 /// Create an async custom type handler
-export function asyncCustomHandler<T>(handler: (command: SocketCommand) => Promise<T>): CommandHandler<T> {
+export function asyncCustomHandler<T>(handler: (command: JanusCommand) => Promise<T>): CommandHandler<T> {
   return new AsyncHandler(async (command) => {
     return HandlerResult.fromPromise(handler(command));
   });
@@ -189,13 +189,13 @@ export function asyncCustomHandler<T>(handler: (command: SocketCommand) => Promi
 
 /// Type-erased handler for registry storage
 export interface BoxedHandler {
-  handleBoxed(command: SocketCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }>;
+  handleBoxed(command: JanusCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }>;
 }
 
 class TypedHandlerWrapper<T> implements BoxedHandler {
   constructor(private handler: CommandHandler<T>) {}
   
-  async handleBoxed(command: SocketCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }> {
+  async handleBoxed(command: JanusCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }> {
     const result = await this.handler.handle(command);
     return result;
   }
@@ -225,7 +225,7 @@ export class HandlerRegistry {
   }
   
   /// Execute a handler for a command
-  async executeHandler(command: string, cmd: SocketCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }> {
+  async executeHandler(command: string, cmd: JanusCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }> {
     const handler = this.handlers.get(command);
     if (!handler) {
       return {

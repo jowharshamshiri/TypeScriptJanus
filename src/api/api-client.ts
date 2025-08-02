@@ -4,7 +4,7 @@
  */
 
 import { JanusClient } from '../core/janus-client';
-import { Manifest, ConnectionConfig, SocketCommand } from '../types/protocol';
+import { Manifest, ConnectionConfig, JanusCommand } from '../types/protocol';
 
 export class APIClientError extends Error {
   constructor(message: string, public code: string, public details?: string) {
@@ -18,7 +18,7 @@ export interface APIClientConfig extends ConnectionConfig {
   manifest?: Manifest;
   
   /** Whether to validate commands against Manifest */
-  validateAgainstSpec?: boolean;
+  validateAgainstManifest?: boolean;
   
   /** Whether to auto-reconnect on connection loss */
   autoReconnect?: boolean;
@@ -70,12 +70,12 @@ export class APIClient {
     timeout?: number
   ): Promise<any> {
     // Validate against Manifest if configured
-    if (this.config.validateAgainstSpec && this.manifest) {
-      this.validateCommandAgainstSpec(channelId, commandName, args);
+    if (this.config.validateAgainstManifest && this.manifest) {
+      this.validateCommandAgainstManifest(channelId, commandName, args);
     }
 
     try {
-      const command: Omit<SocketCommand, 'reply_to'> = {
+      const command: Omit<JanusCommand, 'reply_to'> = {
         id: this.generateCommandId(),
         channelId,
         command: commandName,
@@ -240,11 +240,11 @@ export class APIClient {
   /**
    * Validate command against Manifest
    */
-  private validateCommandAgainstSpec(channelId: string, commandName: string, args?: Record<string, any>): void {
+  private validateCommandAgainstManifest(channelId: string, commandName: string, args?: Record<string, any>): void {
     if (!this.manifest) {
       throw new APIClientError(
         'No Manifest available for validation',
-        'NO_API_SPEC',
+        'NO_MANIFEST',
         'Set an Manifest to enable validation'
       );
     }

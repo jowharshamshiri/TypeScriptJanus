@@ -48,7 +48,7 @@ function parseArgs() {
   return { socketPath, specPath };
 }
 
-const { socketPath: SOCKET_PATH, specPath: API_SPEC_PATH } = parseArgs();
+const { socketPath: SOCKET_PATH, specPath: MANIFEST_PATH } = parseArgs();
 
 async function main() {
   console.log('🚀 Starting TypeScript Janus Client Example');
@@ -57,11 +57,11 @@ async function main() {
   // Load Manifest
   let manifest;
   try {
-    const manifestContent = await fs.promises.readFile(API_SPEC_PATH, 'utf8');
+    const manifestContent = await fs.promises.readFile(MANIFEST_PATH, 'utf8');
     manifest = JSON.parse(manifestContent);
     console.log(`📋 Loaded Manifest: ${manifest.name} v${manifest.version}`);
   } catch (error) {
-    console.warn(`⚠️ Could not load Manifest from ${API_SPEC_PATH}, continuing without validation`);
+    console.warn(`⚠️ Could not load Manifest from ${MANIFEST_PATH}, continuing without validation`);
   }
 
   // Create client
@@ -69,7 +69,7 @@ async function main() {
     socketPath: SOCKET_PATH,
     defaultTimeout: 10.0,
     manifest,
-    validateAgainstSpec: !!manifest,
+    validateAgainstManifest: !!manifest,
     autoReconnect: true
   });
 

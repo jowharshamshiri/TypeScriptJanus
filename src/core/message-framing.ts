@@ -3,7 +3,7 @@
  * Implements 4-byte big-endian length prefix framing
  */
 
-import { SocketMessage, SocketCommand, SocketResponse } from '../types/protocol';
+import { SocketMessage, JanusCommand, JanusResponse } from '../types/protocol';
 
 export class MessageFramingError extends Error {
   constructor(message: string, public code: string) {
@@ -19,7 +19,7 @@ export class MessageFraming {
   /**
    * Encode a message with 4-byte big-endian length prefix
    */
-  static encodeMessage(message: SocketCommand | SocketResponse): Buffer {
+  static encodeMessage(message: JanusCommand | JanusResponse): Buffer {
     try {
       // Create message envelope
       const messageType = 'id' in message ? 'command' : 'response';
@@ -63,7 +63,7 @@ export class MessageFraming {
   /**
    * Decode a message from buffer with length prefix
    */
-  static decodeMessage(buffer: Buffer): { message: SocketCommand | SocketResponse; remainingBuffer: Buffer } {
+  static decodeMessage(buffer: Buffer): { message: JanusCommand | JanusResponse; remainingBuffer: Buffer } {
     try {
       // Check if we have at least the length prefix
       if (buffer.length < this.LENGTH_PREFIX_SIZE) {
@@ -152,7 +152,7 @@ export class MessageFraming {
       
       // Parse payload JSON
       const payloadJson = payloadBuffer.toString('utf8');
-      let message: SocketCommand | SocketResponse;
+      let message: JanusCommand | JanusResponse;
       
       try {
         message = JSON.parse(payloadJson);
@@ -185,8 +185,8 @@ export class MessageFraming {
   /**
    * Extract complete messages from a buffer, handling partial messages
    */
-  static extractMessages(buffer: Buffer): { messages: (SocketCommand | SocketResponse)[]; remainingBuffer: Buffer } {
-    const messages: (SocketCommand | SocketResponse)[] = [];
+  static extractMessages(buffer: Buffer): { messages: (JanusCommand | JanusResponse)[]; remainingBuffer: Buffer } {
+    const messages: (JanusCommand | JanusResponse)[] = [];
     let currentBuffer = buffer;
     
     while (currentBuffer.length > 0) {
@@ -212,7 +212,7 @@ export class MessageFraming {
   /**
    * Calculate the total size needed for a message when framed
    */
-  static calculateFramedSize(message: SocketCommand | SocketResponse): number {
+  static calculateFramedSize(message: JanusCommand | JanusResponse): number {
     const encoded = this.encodeMessage(message);
     return encoded.length;
   }
@@ -220,7 +220,7 @@ export class MessageFraming {
   /**
    * Validate command structure
    */
-  private static validateCommandStructure(message: any): asserts message is SocketCommand {
+  private static validateCommandStructure(message: any): asserts message is JanusCommand {
     if (!message || typeof message !== 'object') {
       throw new MessageFramingError('Command must be an object', 'INVALID_COMMAND_STRUCTURE');
     }
@@ -255,7 +255,7 @@ export class MessageFraming {
   /**
    * Validate response structure
    */
-  private static validateResponseStructure(message: any): asserts message is SocketResponse {
+  private static validateResponseStructure(message: any): asserts message is JanusResponse {
     if (!message || typeof message !== 'object') {
       throw new MessageFramingError('Response must be an object', 'INVALID_RESPONSE_STRUCTURE');
     }
@@ -290,7 +290,7 @@ export class MessageFraming {
   /**
    * Create a direct JSON message for simple cases (without envelope)
    */
-  static encodeDirectMessage(message: SocketCommand | SocketResponse): Buffer {
+  static encodeDirectMessage(message: JanusCommand | JanusResponse): Buffer {
     try {
       const jsonPayload = JSON.stringify(message);
       const messageBuffer = Buffer.from(jsonPayload, 'utf8');
@@ -322,7 +322,7 @@ export class MessageFraming {
   /**
    * Decode a direct JSON message (without envelope)
    */
-  static decodeDirectMessage(buffer: Buffer): { message: SocketCommand | SocketResponse; remainingBuffer: Buffer } {
+  static decodeDirectMessage(buffer: Buffer): { message: JanusCommand | JanusResponse; remainingBuffer: Buffer } {
     try {
       // Check length prefix
       if (buffer.length < this.LENGTH_PREFIX_SIZE) {

@@ -3,7 +3,7 @@
  * Tests for Manifest parser rejecting reserved commands
  */
 
-import { ManifestParser, ManifestError } from '../specification/api-specification-parser';
+import { ManifestParser, ManifestError } from '../specification/manifest-parser';
 
 describe('Reserved Command Validation', () => {
   test('should reject Manifests defining built-in commands', () => {
@@ -178,7 +178,7 @@ describe('Reserved Command Validation', () => {
     try {
       parser.parseJSONString(JSON.stringify(invalidSpec));
       fail('Should have thrown ManifestError');
-    } catch (error) {
+    } catch (error: any) {
       expect(error).toBeInstanceOf(ManifestError);
       expect(error.message).toMatch(/spec.*reserved/i);
       expect(error.details).toMatch(/reserved commands/i);

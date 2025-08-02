@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import * as fs from 'fs';
 import * as unixDgram from 'unix-dgram';
-import { SocketCommand, SocketResponse } from '../types/protocol.js';
+import { JanusCommand, JanusResponse } from '../types/protocol.js';
 import { JanusClient } from '../core/janus-client.js';
 
 const program = new Command();
@@ -46,7 +46,7 @@ async function listenForDatagrams(socketPath: string): Promise<void> {
     
     socket.on('message', async (buffer: Buffer) => {
         try {
-            const cmd: SocketCommand = JSON.parse(buffer.toString());
+            const cmd: JanusCommand = JSON.parse(buffer.toString());
             console.log(`Received datagram: ${cmd.command} (ID: ${cmd.id})`);
             
             // Send response via reply_to if specified
@@ -95,7 +95,7 @@ async function sendDatagram(target: string, command: string, message: string): P
         args.message = message;
     }
 
-    const cmd: SocketCommand = {
+    const cmd: JanusCommand = {
         id: generateId(),
         channelId: 'test',
         command,
@@ -172,7 +172,7 @@ async function sendResponse(
             result.error = `Unknown command: ${command}`;
     }
     
-    const response: SocketResponse = {
+    const response: JanusResponse = {
         commandId,
         channelId,
         success,

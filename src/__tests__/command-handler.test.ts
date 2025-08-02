@@ -18,13 +18,13 @@ import {
   asyncObjectHandler,
   asyncCustomHandler,
 } from '../server/command-handler';
-import { SocketCommand } from '../types/protocol';
+import { JanusCommand } from '../types/protocol';
 import { JSONRPCErrorCode, JSONRPCErrorBuilder } from '../types/jsonrpc-error';
 
 describe('CommandHandler System', () => {
   
   // Helper to create test command
-  const createTestCommand = (args: Record<string, any> = {}): SocketCommand => ({
+  const createTestCommand = (args: Record<string, any> = {}): JanusCommand => ({
     id: 'test-id',
     channelId: 'test-channel',
     command: 'test-command',

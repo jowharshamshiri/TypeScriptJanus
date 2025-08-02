@@ -3,17 +3,17 @@
  */
 
 import { MessageFraming, MessageFramingError } from '../core/message-framing';
-import { SocketCommand, SocketResponse } from '../types/protocol';
+import { JanusCommand, JanusResponse } from '../types/protocol';
 
 describe('MessageFraming', () => {
-  const sampleCommand: SocketCommand = {
+  const sampleCommand: JanusCommand = {
     id: '550e8400-e29b-41d4-a716-446655440000',
     channelId: 'test-service',
     command: 'ping',
     timestamp: 1722248200
   };
 
-  const sampleResponse: SocketResponse = {
+  const sampleResponse: JanusResponse = {
     commandId: '550e8400-e29b-41d4-a716-446655440000',
     channelId: 'test-service',
     success: true,

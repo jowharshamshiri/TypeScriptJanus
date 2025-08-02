@@ -8,14 +8,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
-import { SocketCommand, SocketResponse, ConnectionConfig } from '../types/protocol';
+import { JanusCommand, JanusResponse, ConnectionConfig } from '../types/protocol';
 import { SecurityValidator } from './security-validator';
-import { SocketBufferManager, BufferLimits, withBufferManagement } from './socket-buffer-manager';
 
 export interface JanusClientEvents {
   'error': (error: Error) => void;
-  'message': (message: SocketCommand | SocketResponse) => void;
-  'response': (response: SocketResponse) => void;
+  'message': (message: JanusCommand | JanusResponse) => void;
+  'response': (response: JanusResponse) => void;
 }
 
 export class JanusClientError extends Error {
@@ -67,7 +66,7 @@ export class JanusClient extends EventEmitter {
   /**
    * Send command datagram and wait for response
    */
-  async sendCommand(command: Omit<SocketCommand, 'reply_to'>): Promise<SocketResponse> {
+  async sendCommand(command: Omit<JanusCommand, 'reply_to'>): Promise<JanusResponse> {
     return new Promise(async (resolve, reject) => {
       const responseSocketPath = this.generateResponseSocketPath();
       let responseSocket: any = null;
@@ -100,7 +99,7 @@ export class JanusClient extends EventEmitter {
         // Set up response listener
         responseSocket.on('message', (data: Buffer) => {
           try {
-            const response: SocketResponse = JSON.parse(data.toString());
+            const response: JanusResponse = JSON.parse(data.toString());
             cleanup();
             resolve(response);
           } catch (err) {
@@ -134,7 +133,7 @@ export class JanusClient extends EventEmitter {
         }, timeout * 1000);
 
         // Prepare command with reply_to field
-        const commandWithReplyTo: SocketCommand = {
+        const commandWithReplyTo: JanusCommand = {
           ...command,
           reply_to: responseSocketPath
         };
@@ -188,7 +187,7 @@ export class JanusClient extends EventEmitter {
   /**
    * Send command without expecting response (fire-and-forget)
    */
-  async sendCommandNoResponse(command: Omit<SocketCommand, 'reply_to'>): Promise<void> {
+  async sendCommandNoResponse(command: Omit<JanusCommand, 'reply_to'>): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         // Validate command

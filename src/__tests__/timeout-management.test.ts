@@ -4,7 +4,7 @@
  */
 
 import { ResponseTracker, ResponseTrackerError } from '../core/response-tracker';
-import { SocketResponse } from '../types/protocol';
+import { JanusResponse } from '../types/protocol';
 
 describe('Timeout Management', () => {
   let tracker: ResponseTracker;
@@ -97,7 +97,7 @@ describe('Timeout Management', () => {
 
       // Send response before timeout
       setTimeout(() => {
-        const response: SocketResponse = {
+        const response: JanusResponse = {
           commandId,
           channelId: 'test-channel',
           success: true,
@@ -147,7 +147,7 @@ describe('Timeout Management', () => {
       tracker.trackCommand('active-test', () => {}, () => {}, 5.0);
       expect(tracker.getPendingCount() > 0).toBe(true);
 
-      const response: SocketResponse = {
+      const response: JanusResponse = {
         commandId: 'active-test',
         channelId: 'test-channel',
         success: true,
@@ -178,7 +178,7 @@ describe('Timeout Management', () => {
       );
 
       // Simulate response
-      const response: SocketResponse = {
+      const response: JanusResponse = {
         commandId,
         channelId: 'test-channel',
         success: true,
@@ -244,7 +244,7 @@ describe('Timeout Management', () => {
         // Immediately send response for half the commands
         if (i % 2 === 0) {
           setTimeout(() => {
-            const response: SocketResponse = {
+            const response: JanusResponse = {
               commandId,
               channelId: 'test-channel',
               success: true,
@@ -260,7 +260,7 @@ describe('Timeout Management', () => {
       setTimeout(() => {
         for (let i = 1; i < commandCount; i += 2) {
           const commandId = `concurrent-${i}`;
-          const response: SocketResponse = {
+          const response: JanusResponse = {
             commandId,
             channelId: 'test-channel',
             success: true,
@@ -302,7 +302,7 @@ describe('Timeout Management', () => {
 
       // Send response
       setTimeout(() => {
-        const response: SocketResponse = {
+        const response: JanusResponse = {
           commandId: 'stats-test',
           channelId: 'test-channel',
           success: true,
@@ -526,7 +526,7 @@ describe('Timeout Management', () => {
 
       // Send response
       setTimeout(() => {
-        const response: SocketResponse = {
+        const response: JanusResponse = {
           commandId,
           channelId: 'test-channel',
           success: true,

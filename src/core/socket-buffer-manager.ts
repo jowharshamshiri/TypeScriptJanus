@@ -281,7 +281,7 @@ export class SocketBufferManager {
     /**
      * Detect EMSGSIZE errors and convert them to descriptive errors
      */
-    static detectEMSGSIZEError(error: any, messageSize?: number): boolean {
+    static detectEMSGSIZEError(error: any): boolean {
         if (!error) return false;
 
         // Check for Node.js socket error patterns
@@ -303,7 +303,7 @@ export class SocketBufferManager {
         messageSize?: number, 
         bufferLimits?: BufferLimits
     ): Error {
-        if (this.detectEMSGSIZEError(error, messageSize)) {
+        if (this.detectEMSGSIZEError(error)) {
             const limits = bufferLimits || {
                 maxDatagramSize: 64 * 1024,
                 systemLimit: 64 * 1024,
@@ -384,7 +384,7 @@ export async function withBufferManagement<T>(
     try {
         return await operation();
     } catch (error: any) {
-        if (SocketBufferManager.detectEMSGSIZEError(error, messageSize)) {
+        if (SocketBufferManager.detectEMSGSIZEError(error)) {
             const bufferLimits = SocketBufferManager.getCachedLimits() || 
                 await SocketBufferManager.detectBufferLimits();
             

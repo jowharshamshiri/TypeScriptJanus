@@ -3,7 +3,7 @@
  * Based on the comprehensive protocol specification
  */
 
-export interface SocketCommand {
+export interface JanusCommand {
   /** UUID v4 string for response correlation */
   id: string;
   
@@ -26,7 +26,7 @@ export interface SocketCommand {
   timestamp: number;
 }
 
-export interface SocketResponse {
+export interface JanusResponse {
   /** UUID from original command for correlation */
   commandId: string;
   
@@ -58,7 +58,7 @@ export interface SocketMessage {
 
 export interface PendingCommand {
   /** Promise resolve function */
-  resolve: (response: SocketResponse) => void;
+  resolve: (response: JanusResponse) => void;
   
   /** Promise reject function */
   reject: (error: Error) => void;

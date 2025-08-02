@@ -3,7 +3,7 @@
  * Tests for all built-in commands: ping, echo, get_info, validate, slow_process, spec
  */
 
-import { SocketCommand } from '../types/protocol';
+import { JanusCommand } from '../types/protocol';
 
 describe('Built-in Command Handlers', () => {
   // Test helper function to simulate command processing
@@ -294,7 +294,7 @@ describe('Built-in Command Handlers', () => {
       testCases.forEach(({ command, expectedArgs }) => {
         // Verify that each command can accept its expected argument structure
         expect(() => {
-          const cmd: SocketCommand = {
+          const cmd: JanusCommand = {
             id: 'test',
             command,
             channelId: 'test',
