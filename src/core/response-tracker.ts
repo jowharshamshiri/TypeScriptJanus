@@ -5,18 +5,12 @@
 
 import { EventEmitter } from 'events';
 import { JanusResponse, PendingCommand } from '../types/protocol';
+import { JSONRPCErrorBuilder, JSONRPCErrorCode, JSONRPCErrorClass } from '../types/jsonrpc-error';
 
 export interface ResponseTrackerEvents {
   'timeout': (commandId: string) => void;
   'response': (commandId: string, response: JanusResponse) => void;
   'cleanup': (commandId: string) => void;
-}
-
-export class ResponseTrackerError extends Error {
-  constructor(message: string, public code: string, public details?: string) {
-    super(message);
-    this.name = 'ResponseTrackerError';
-  }
 }
 
 export interface TrackerConfig {
@@ -58,21 +52,19 @@ export class ResponseTracker extends EventEmitter {
   ): void {
     // Check limits
     if (this.pendingCommands.size >= this.config.maxPendingCommands) {
-      reject(new ResponseTrackerError(
-        'Too many pending commands',
-        'PENDING_COMMANDS_LIMIT',
-        `Maximum ${this.config.maxPendingCommands} commands allowed`
-      ));
+      reject(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        `Too many pending commands: Maximum ${this.config.maxPendingCommands} commands allowed`
+      )));
       return;
     }
 
     // Check for duplicate tracking
     if (this.pendingCommands.has(commandId)) {
-      reject(new ResponseTrackerError(
-        'Command already being tracked',
-        'DUPLICATE_COMMAND_ID',
-        `Command ${commandId} is already awaiting response`
-      ));
+      reject(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        `Command already being tracked: Command ${commandId} is already awaiting response`
+      )));
       return;
     }
 
@@ -114,11 +106,10 @@ export class ResponseTracker extends EventEmitter {
     if (response.success) {
       pending.resolve(response);
     } else {
-      const error = new ResponseTrackerError(
-        response.error?.message ?? 'Command failed',
-        response.error?.code?.toString() ?? 'COMMAND_FAILED',
-        response.error?.data?.details
-      );
+      const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        response.error?.message ?? 'Command failed'
+      ));
       pending.reject(error);
     }
 
@@ -138,11 +129,10 @@ export class ResponseTracker extends EventEmitter {
     this.pendingCommands.delete(commandId);
     this.emit('cleanup', commandId);
 
-    const error = new ResponseTrackerError(
-      reason ?? 'Command cancelled',
-      'COMMAND_CANCELLED',
-      `Command ${commandId} was cancelled`
-    );
+    const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+      JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+      reason ?? `Command ${commandId} was cancelled`
+    ));
     pending.reject(error);
 
     return true;
@@ -155,11 +145,10 @@ export class ResponseTracker extends EventEmitter {
     const count = this.pendingCommands.size;
     
     for (const [commandId, pending] of this.pendingCommands) {
-      const error = new ResponseTrackerError(
-        reason ?? 'All commands cancelled',
-        'ALL_COMMANDS_CANCELLED',
+      const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
         reason ?? 'All pending commands were cancelled'
-      );
+      ));
       pending.reject(error);
       this.emit('cleanup', commandId);
     }
@@ -237,21 +226,19 @@ export class ResponseTracker extends EventEmitter {
   ): void {
     // Check limits
     if (this.pendingCommands.size >= this.config.maxPendingCommands) {
-      onError(new ResponseTrackerError(
-        'Too many pending commands',
-        'PENDING_COMMANDS_LIMIT',
-        `Maximum ${this.config.maxPendingCommands} commands allowed`
-      ));
+      onError(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        `Too many pending commands: Maximum ${this.config.maxPendingCommands} commands allowed`
+      )));
       return;
     }
 
     // Check for duplicate tracking
     if (this.pendingCommands.has(commandId)) {
-      onError(new ResponseTrackerError(
-        'Command already being tracked',
-        'DUPLICATE_COMMAND_ID',
-        `Command ${commandId} is already awaiting response`
-      ));
+      onError(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        `Command already being tracked: Command ${commandId} is already awaiting response`
+      )));
       return;
     }
 
@@ -368,11 +355,10 @@ export class ResponseTracker extends EventEmitter {
     this.emit('timeout', commandId);
     this.emit('cleanup', commandId);
 
-    const error = new ResponseTrackerError(
-      'Command timeout',
-      'COMMAND_TIMEOUT',
+    const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+      JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
       `Command ${commandId} timed out after ${pending.timeout} seconds`
-    );
+    ));
     pending.reject(error);
   }
 

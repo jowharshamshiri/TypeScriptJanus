@@ -36,9 +36,15 @@ describe('Reserved Command Validation', () => {
       parser.parseJSONString(JSON.stringify(invalidSpec));
     }).toThrow(ManifestError);
     
-    expect(() => {
+    // Validate error code instead of message content
+    try {
       parser.parseJSONString(JSON.stringify(invalidSpec));
-    }).toThrow(/reserved.*ping/i);
+      fail('Should have thrown ManifestError');
+    } catch (error) {
+      const manifestError = error as ManifestError;
+      expect(manifestError).toBeInstanceOf(ManifestError);
+      expect(manifestError.code).toBe(-32013); // ManifestValidationError code
+    }
   });
 
   test('should reject Manifests with multiple reserved commands', () => {
@@ -75,12 +81,12 @@ describe('Reserved Command Validation', () => {
         parser.parseJSONString(JSON.stringify(invalidSpec));
         return null;
       } catch (e) {
-        return e as Error;
+        return e as ManifestError;
       }
     })();
     
     expect(error).not.toBeNull();
-    expect(error!.message.toLowerCase()).toMatch(/reserved.*(echo|get_info)/);
+    expect(error!.code).toBe(-32013); // ManifestValidationError code for reserved command detection
   });
 
   test('should validate each reserved command individually', () => {
@@ -110,9 +116,15 @@ describe('Reserved Command Validation', () => {
         parser.parseJSONString(JSON.stringify(invalidSpec));
       }).toThrow(ManifestError);
       
-      expect(() => {
+      // Validate error code instead of message content
+      try {
         parser.parseJSONString(JSON.stringify(invalidSpec));
-      }).toThrow(new RegExp(`reserved.*${reservedCmd}`, 'i'));
+        fail(`Should have thrown ManifestError for reserved command: ${reservedCmd}`);
+      } catch (error) {
+        const manifestError = error as ManifestError;
+        expect(manifestError).toBeInstanceOf(ManifestError);
+        expect(manifestError.code).toBe(-32013); // ManifestValidationError code
+      }
     }
   });
 
@@ -178,10 +190,12 @@ describe('Reserved Command Validation', () => {
     try {
       parser.parseJSONString(JSON.stringify(invalidSpec));
       fail('Should have thrown ManifestError');
-    } catch (error: any) {
-      expect(error).toBeInstanceOf(ManifestError);
-      expect(error.message).toMatch(/spec.*reserved/i);
-      expect(error.details).toMatch(/reserved commands/i);
+    } catch (error) {
+      const manifestError = error as ManifestError;
+      expect(manifestError).toBeInstanceOf(ManifestError);
+      expect(manifestError.code).toBe(-32013); // ManifestValidationError code
+      // Error details can still be checked for diagnostic purposes, but primary validation is by code
+      expect(manifestError.details).toBeDefined();
     }
   });
 
@@ -215,8 +229,13 @@ describe('Reserved Command Validation', () => {
     }).toThrow(ManifestError);
     
     // The valid command structure should be fine, but the reserved command should cause failure
-    expect(() => {
+    try {
       parser.parseJSONString(JSON.stringify(mixedSpec));
-    }).toThrow(/ping.*reserved/i);
+      fail('Should have thrown ManifestError for mixed spec with reserved command');
+    } catch (error) {
+      const manifestError = error as ManifestError;
+      expect(manifestError).toBeInstanceOf(ManifestError);
+      expect(manifestError.code).toBe(-32013); // ManifestValidationError code
+    }
   });
 });

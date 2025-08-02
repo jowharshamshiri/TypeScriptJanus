@@ -4,13 +4,7 @@
  */
 
 import { SocketMessage, JanusCommand, JanusResponse } from '../types/protocol';
-
-export class MessageFramingError extends Error {
-  constructor(message: string, public code: string) {
-    super(message);
-    this.name = 'MessageFramingError';
-  }
-}
+import { JSONRPCErrorBuilder, JSONRPCErrorCode, JSONRPCErrorClass } from '../types/jsonrpc-error';
 
 export class MessageFraming {
   private static readonly LENGTH_PREFIX_SIZE = 4;
@@ -37,10 +31,10 @@ export class MessageFraming {
       
       // Validate message size
       if (messageBuffer.length > this.MAX_MESSAGE_SIZE) {
-        throw new MessageFramingError(
-          `Message size ${messageBuffer.length} exceeds maximum ${this.MAX_MESSAGE_SIZE}`,
-          'MESSAGE_TOO_LARGE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Message size ${messageBuffer.length} exceeds maximum ${this.MAX_MESSAGE_SIZE}`
+        ));
       }
       
       // Create length prefix (4-byte big-endian)
@@ -50,13 +44,13 @@ export class MessageFraming {
       // Combine length prefix and message
       return Buffer.concat([lengthBuffer, messageBuffer]);
     } catch (error) {
-      if (error instanceof MessageFramingError) {
+      if (error instanceof JSONRPCErrorClass) {
         throw error;
       }
-      throw new MessageFramingError(
-        `Failed to encode message: ${error instanceof Error ? error.message : String(error)}`,
-        'ENCODING_FAILED'
-      );
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        `Failed to encode message: ${error instanceof Error ? error.message : String(error)}`
+      ));
     }
   }
 
@@ -67,10 +61,10 @@ export class MessageFraming {
     try {
       // Check if we have at least the length prefix
       if (buffer.length < this.LENGTH_PREFIX_SIZE) {
-        throw new MessageFramingError(
-          `Buffer too small for length prefix: ${buffer.length} < ${this.LENGTH_PREFIX_SIZE}`,
-          'INCOMPLETE_LENGTH_PREFIX'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Buffer too small for length prefix: ${buffer.length} < ${this.LENGTH_PREFIX_SIZE}`
+        ));
       }
       
       // Read message length from big-endian prefix
@@ -78,26 +72,26 @@ export class MessageFraming {
       
       // Validate message length
       if (messageLength > this.MAX_MESSAGE_SIZE) {
-        throw new MessageFramingError(
-          `Message length ${messageLength} exceeds maximum ${this.MAX_MESSAGE_SIZE}`,
-          'MESSAGE_TOO_LARGE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Message length ${messageLength} exceeds maximum ${this.MAX_MESSAGE_SIZE}`
+        ));
       }
       
       if (messageLength === 0) {
-        throw new MessageFramingError(
-          'Message length cannot be zero',
-          'ZERO_LENGTH_MESSAGE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          'Message length cannot be zero'
+        ));
       }
       
       // Check if we have the complete message
       const totalRequired = this.LENGTH_PREFIX_SIZE + messageLength;
       if (buffer.length < totalRequired) {
-        throw new MessageFramingError(
-          `Buffer too small for complete message: ${buffer.length} < ${totalRequired}`,
-          'INCOMPLETE_MESSAGE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Buffer too small for complete message: ${buffer.length} < ${totalRequired}`
+        ));
       }
       
       // Extract message data
@@ -111,32 +105,32 @@ export class MessageFraming {
       try {
         envelope = JSON.parse(envelopeJson);
       } catch (jsonError) {
-        throw new MessageFramingError(
-          `Failed to parse message envelope JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`,
-          'INVALID_JSON_ENVELOPE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Failed to parse message envelope JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`
+        ));
       }
       
       // Validate envelope structure
       if (!envelope || typeof envelope !== 'object') {
-        throw new MessageFramingError(
-          'Message envelope must be an object',
-          'INVALID_ENVELOPE_TYPE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          'Message envelope must be an object'
+        ));
       }
       
       if (!envelope.type || !envelope.payload) {
-        throw new MessageFramingError(
-          'Message envelope missing required fields (type, payload)',
-          'MISSING_ENVELOPE_FIELDS'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          'Message envelope missing required fields (type, payload)'
+        ));
       }
       
       if (envelope.type !== 'command' && envelope.type !== 'response') {
-        throw new MessageFramingError(
-          `Invalid message type: ${envelope.type}`,
-          'INVALID_MESSAGE_TYPE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Invalid message type: ${envelope.type}`
+        ));
       }
       
       // Decode base64 payload
@@ -144,10 +138,10 @@ export class MessageFraming {
       try {
         payloadBuffer = Buffer.from(envelope.payload, 'base64');
       } catch (base64Error) {
-        throw new MessageFramingError(
-          `Failed to decode base64 payload: ${base64Error instanceof Error ? base64Error.message : String(base64Error)}`,
-          'INVALID_BASE64_PAYLOAD'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Failed to decode base64 payload: ${base64Error instanceof Error ? base64Error.message : String(base64Error)}`
+        ));
       }
       
       // Parse payload JSON
@@ -157,10 +151,10 @@ export class MessageFraming {
       try {
         message = JSON.parse(payloadJson);
       } catch (jsonError) {
-        throw new MessageFramingError(
-          `Failed to parse payload JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`,
-          'INVALID_PAYLOAD_JSON'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Failed to parse payload JSON: ${jsonError instanceof Error ? jsonError.message : String(jsonError)}`
+        ));
       }
       
       // Validate message structure based on type
@@ -172,13 +166,13 @@ export class MessageFraming {
       
       return { message, remainingBuffer };
     } catch (error) {
-      if (error instanceof MessageFramingError) {
+      if (error instanceof JSONRPCErrorClass) {
         throw error;
       }
-      throw new MessageFramingError(
-        `Failed to decode message: ${error instanceof Error ? error.message : String(error)}`,
-        'DECODING_FAILED'
-      );
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        `Failed to decode message: ${error instanceof Error ? error.message : String(error)}`
+      ));
     }
   }
 
@@ -196,8 +190,9 @@ export class MessageFraming {
         messages.push(result.message);
         currentBuffer = result.remainingBuffer;
       } catch (error) {
-        if (error instanceof MessageFramingError && 
-            (error.code === 'INCOMPLETE_LENGTH_PREFIX' || error.code === 'INCOMPLETE_MESSAGE')) {
+        if (error instanceof JSONRPCErrorClass && error.data?.details &&
+            (error.data.details.includes('Buffer too small for length prefix') || 
+             error.data.details.includes('Buffer too small for complete message'))) {
           // Not enough data for complete message, save remaining buffer
           break;
         }
@@ -222,33 +217,42 @@ export class MessageFraming {
    */
   private static validateCommandStructure(message: any): asserts message is JanusCommand {
     if (!message || typeof message !== 'object') {
-      throw new MessageFramingError('Command must be an object', 'INVALID_COMMAND_STRUCTURE');
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        'Command must be an object'
+      ));
     }
     
     const requiredStringFields = ['id', 'channelId', 'command'];
     for (const field of requiredStringFields) {
       if (!(field in message) || typeof message[field] !== 'string') {
-        throw new MessageFramingError(
-          `Command missing required string field: ${field}`,
-          'MISSING_COMMAND_FIELD'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Command missing required string field: ${field}`
+        ));
       }
     }
     
     // Validate timestamp as number (Unix timestamp)
     if (!('timestamp' in message) || typeof message.timestamp !== 'number') {
-      throw new MessageFramingError(
-        'Command missing required number field: timestamp',
-        'MISSING_COMMAND_FIELD'
-      );
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        'Command missing required number field: timestamp'
+      ));
     }
     
     if (message.args !== undefined && (typeof message.args !== 'object' || message.args === null)) {
-      throw new MessageFramingError('Command args must be an object', 'INVALID_COMMAND_ARGS');
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        'Command args must be an object'
+      ));
     }
     
     if (message.timeout !== undefined && typeof message.timeout !== 'number') {
-      throw new MessageFramingError('Command timeout must be a number', 'INVALID_COMMAND_TIMEOUT');
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        'Command timeout must be a number'
+      ));
     }
   }
 
@@ -257,33 +261,42 @@ export class MessageFraming {
    */
   private static validateResponseStructure(message: any): asserts message is JanusResponse {
     if (!message || typeof message !== 'object') {
-      throw new MessageFramingError('Response must be an object', 'INVALID_RESPONSE_STRUCTURE');
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        'Response must be an object'
+      ));
     }
     
     const requiredFields = ['commandId', 'channelId', 'success', 'timestamp'];
     for (const field of requiredFields) {
       if (!(field in message)) {
-        throw new MessageFramingError(
-          `Response missing required field: ${field}`,
-          'MISSING_RESPONSE_FIELD'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Response missing required field: ${field}`
+        ));
       }
     }
     
     if (typeof message.commandId !== 'string' || typeof message.channelId !== 'string' ||
         typeof message.success !== 'boolean' || typeof message.timestamp !== 'number') {
-      throw new MessageFramingError(
-        'Response field types invalid',
-        'INVALID_RESPONSE_FIELD_TYPES'
-      );
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        'Response field types invalid'
+      ));
     }
     
     if (message.result !== undefined && (typeof message.result !== 'object' || message.result === null)) {
-      throw new MessageFramingError('Response result must be an object', 'INVALID_RESPONSE_RESULT');
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        'Response result must be an object'
+      ));
     }
     
     if (message.error !== undefined && (typeof message.error !== 'object' || message.error === null)) {
-      throw new MessageFramingError('Response error must be an object', 'INVALID_RESPONSE_ERROR');
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        'Response error must be an object'
+      ));
     }
   }
 
@@ -297,10 +310,10 @@ export class MessageFraming {
       
       // Validate message size
       if (messageBuffer.length > this.MAX_MESSAGE_SIZE) {
-        throw new MessageFramingError(
-          `Message size ${messageBuffer.length} exceeds maximum ${this.MAX_MESSAGE_SIZE}`,
-          'MESSAGE_TOO_LARGE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Message size ${messageBuffer.length} exceeds maximum ${this.MAX_MESSAGE_SIZE}`
+        ));
       }
       
       // Create length prefix
@@ -309,13 +322,13 @@ export class MessageFraming {
       
       return Buffer.concat([lengthBuffer, messageBuffer]);
     } catch (error) {
-      if (error instanceof MessageFramingError) {
+      if (error instanceof JSONRPCErrorClass) {
         throw error;
       }
-      throw new MessageFramingError(
-        `Failed to encode direct message: ${error instanceof Error ? error.message : String(error)}`,
-        'ENCODING_FAILED'
-      );
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        `Failed to encode direct message: ${error instanceof Error ? error.message : String(error)}`
+      ));
     }
   }
 
@@ -326,20 +339,20 @@ export class MessageFraming {
     try {
       // Check length prefix
       if (buffer.length < this.LENGTH_PREFIX_SIZE) {
-        throw new MessageFramingError(
-          `Buffer too small for length prefix: ${buffer.length} < ${this.LENGTH_PREFIX_SIZE}`,
-          'INCOMPLETE_LENGTH_PREFIX'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Buffer too small for length prefix: ${buffer.length} < ${this.LENGTH_PREFIX_SIZE}`
+        ));
       }
       
       const messageLength = buffer.readUInt32BE(0);
       const totalRequired = this.LENGTH_PREFIX_SIZE + messageLength;
       
       if (buffer.length < totalRequired) {
-        throw new MessageFramingError(
-          `Buffer too small for complete message: ${buffer.length} < ${totalRequired}`,
-          'INCOMPLETE_MESSAGE'
-        );
+        throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+          JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+          `Buffer too small for complete message: ${buffer.length} < ${totalRequired}`
+        ));
       }
       
       // Extract and parse message
@@ -351,13 +364,13 @@ export class MessageFraming {
       
       return { message, remainingBuffer };
     } catch (error) {
-      if (error instanceof MessageFramingError) {
+      if (error instanceof JSONRPCErrorClass) {
         throw error;
       }
-      throw new MessageFramingError(
-        `Failed to decode direct message: ${error instanceof Error ? error.message : String(error)}`,
-        'DECODING_FAILED'
-      );
+      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
+        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
+        `Failed to decode direct message: ${error instanceof Error ? error.message : String(error)}`
+      ));
     }
   }
 }

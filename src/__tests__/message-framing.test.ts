@@ -2,8 +2,9 @@
  * Tests for MessageFraming
  */
 
-import { MessageFraming, MessageFramingError } from '../core/message-framing';
+import { MessageFraming } from '../core/message-framing';
 import { JanusCommand, JanusResponse } from '../types/protocol';
+import { JSONRPCErrorClass } from '../types/jsonrpc-error';
 
 describe('MessageFraming', () => {
   const sampleCommand: JanusCommand = {
@@ -51,7 +52,7 @@ describe('MessageFraming', () => {
       
       expect(() => {
         MessageFraming.encodeMessage(largeCommand);
-      }).toThrow(MessageFramingError);
+      }).toThrow(JSONRPCErrorClass);
     });
   });
 
@@ -92,7 +93,7 @@ describe('MessageFraming', () => {
       
       expect(() => {
         MessageFraming.decodeMessage(shortBuffer);
-      }).toThrow(MessageFramingError);
+      }).toThrow(JSONRPCErrorClass);
     });
 
     it('should throw error for incomplete message', () => {
@@ -101,7 +102,7 @@ describe('MessageFraming', () => {
       
       expect(() => {
         MessageFraming.decodeMessage(truncated);
-      }).toThrow(MessageFramingError);
+      }).toThrow(JSONRPCErrorClass);
     });
 
     it('should throw error for zero-length message', () => {
@@ -109,7 +110,7 @@ describe('MessageFraming', () => {
       
       expect(() => {
         MessageFraming.decodeMessage(zeroLengthBuffer);
-      }).toThrow(MessageFramingError);
+      }).toThrow(JSONRPCErrorClass);
     });
   });
 

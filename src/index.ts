@@ -9,8 +9,8 @@ export * from './types/protocol';
 export { JanusClient as CoreJanusClient, JanusClientError as CoreJanusClientError } from './core/janus-client';
 export { JanusServer, JanusServerError } from './server/janus-server';
 export { SecurityValidator, ValidationResult } from './core/security-validator';
-export { MessageFraming, MessageFramingError } from './core/message-framing';
-export { ResponseTracker, ResponseTrackerError } from './core/response-tracker';
+export { MessageFraming } from './core/message-framing';
+export { ResponseTracker } from './core/response-tracker';
 
 // High-level API
 export { APIClient, APIClientError } from './api/api-client';

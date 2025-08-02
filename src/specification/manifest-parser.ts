@@ -11,8 +11,11 @@ import { Manifest, Channel, Command, Argument, Model } from '../types/protocol';
 
 /**
  * Error thrown during Manifest parsing or validation
+ * Follows JSONRPCError standard with manifest validation error code
  */
 export class ManifestError extends Error {
+  public readonly code: number = -32013; // ManifestValidationError code
+  
   constructor(message: string, public readonly details?: string) {
     super(message);
     this.name = 'ManifestError';

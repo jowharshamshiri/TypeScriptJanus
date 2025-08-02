@@ -21,6 +21,11 @@ export enum JSONRPCErrorCode {
     CONFIGURATION_ERROR = -32008,
     SECURITY_VIOLATION = -32009,
     RESOURCE_LIMIT_EXCEEDED = -32010,
+
+    // Janus Protocol-Specific Error Codes (-32011 to -32013)
+    MESSAGE_FRAMING_ERROR = -32011,
+    RESPONSE_TRACKING_ERROR = -32012,
+    MANIFEST_VALIDATION_ERROR = -32013,
 }
 
 /**
@@ -44,6 +49,9 @@ export function getErrorCodeString(code: JSONRPCErrorCode): string {
         case JSONRPCErrorCode.CONFIGURATION_ERROR: return 'CONFIGURATION_ERROR';
         case JSONRPCErrorCode.SECURITY_VIOLATION: return 'SECURITY_VIOLATION';
         case JSONRPCErrorCode.RESOURCE_LIMIT_EXCEEDED: return 'RESOURCE_LIMIT_EXCEEDED';
+        case JSONRPCErrorCode.MESSAGE_FRAMING_ERROR: return 'MESSAGE_FRAMING_ERROR';
+        case JSONRPCErrorCode.RESPONSE_TRACKING_ERROR: return 'RESPONSE_TRACKING_ERROR';
+        case JSONRPCErrorCode.MANIFEST_VALIDATION_ERROR: return 'MANIFEST_VALIDATION_ERROR';
         default: return `UNKNOWN_ERROR_${code}`;
     }
 }
@@ -69,6 +77,9 @@ export function getErrorCodeMessage(code: JSONRPCErrorCode): string {
         case JSONRPCErrorCode.CONFIGURATION_ERROR: return 'Configuration error';
         case JSONRPCErrorCode.SECURITY_VIOLATION: return 'Security violation';
         case JSONRPCErrorCode.RESOURCE_LIMIT_EXCEEDED: return 'Resource limit exceeded';
+        case JSONRPCErrorCode.MESSAGE_FRAMING_ERROR: return 'Message framing error';
+        case JSONRPCErrorCode.RESPONSE_TRACKING_ERROR: return 'Response tracking error';
+        case JSONRPCErrorCode.MANIFEST_VALIDATION_ERROR: return 'Manifest validation error';
         default: return 'Unknown error';
     }
 }
@@ -302,27 +313,7 @@ export class JSONRPCErrorClass extends Error implements JSONRPCError {
     }
 }
 
-/**
- * Legacy error code mapping for backward compatibility
- */
-export function mapLegacyErrorCode(legacyCode: string): JSONRPCErrorCode {
-    switch (legacyCode) {
-        case 'UNKNOWN_COMMAND': return JSONRPCErrorCode.METHOD_NOT_FOUND;
-        case 'VALIDATION_ERROR': return JSONRPCErrorCode.VALIDATION_FAILED;
-        case 'INVALID_ARGUMENTS': return JSONRPCErrorCode.INVALID_PARAMS;
-        case 'HANDLER_ERROR': return JSONRPCErrorCode.INTERNAL_ERROR;
-        case 'HANDLER_TIMEOUT': return JSONRPCErrorCode.HANDLER_TIMEOUT;
-        case 'SOCKET_ERROR': return JSONRPCErrorCode.SOCKET_ERROR;
-        case 'SECURITY_VIOLATION': return JSONRPCErrorCode.SECURITY_VIOLATION;
-        case 'RESOURCE_LIMIT': return JSONRPCErrorCode.RESOURCE_LIMIT_EXCEEDED;
-        case 'SERVICE_UNAVAILABLE': return JSONRPCErrorCode.SERVICE_UNAVAILABLE;
-        case 'AUTHENTICATION_FAILED': return JSONRPCErrorCode.AUTHENTICATION_FAILED;
-        case 'CONFIGURATION_ERROR': return JSONRPCErrorCode.CONFIGURATION_ERROR;
-        case 'PARSE_ERROR': return JSONRPCErrorCode.PARSE_ERROR;
-        case 'INVALID_REQUEST': return JSONRPCErrorCode.INVALID_REQUEST;
-        default: return JSONRPCErrorCode.SERVER_ERROR;
-    }
-}
+// Legacy error mapping removed - all error handling now uses JSONRPCError directly
 
 /**
  * Utility functions for working with JSON-RPC errors
