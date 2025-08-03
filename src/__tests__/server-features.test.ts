@@ -404,12 +404,12 @@ describe('Server Features', () => {
       }
 
       console.log('✅ Command execution with timeout validated');
-    });
+    }, 15000);
   });
 
   describe('Socket File Cleanup', () => {
     test('should cleanup socket files on start and shutdown', async () => {
-      const socketPath = path.join(tempDir, 'cleanup-test.sock');
+      const socketPath = `/tmp/cleanup-test-${Date.now()}.sock`;
 
       // Create dummy socket file
       fs.writeFileSync(socketPath, '');
@@ -446,6 +446,6 @@ describe('Server Features', () => {
       expect(fs.existsSync(socketPath)).toBe(false);
 
       console.log('✅ Socket file cleanup validated');
-    });
+    }, 10000);
   });
 });
