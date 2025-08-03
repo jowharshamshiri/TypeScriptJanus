@@ -53,7 +53,7 @@ export class ResponseTracker extends EventEmitter {
     // Check limits
     if (this.pendingCommands.size >= this.config.maxPendingCommands) {
       reject(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
-        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        JSONRPCErrorCode.RESOURCE_LIMIT_EXCEEDED,
         `Too many pending commands: Maximum ${this.config.maxPendingCommands} commands allowed`
       )));
       return;
@@ -62,7 +62,7 @@ export class ResponseTracker extends EventEmitter {
     // Check for duplicate tracking
     if (this.pendingCommands.has(commandId)) {
       reject(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
-        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        JSONRPCErrorCode.INVALID_REQUEST,
         `Command already being tracked: Command ${commandId} is already awaiting response`
       )));
       return;
@@ -227,7 +227,7 @@ export class ResponseTracker extends EventEmitter {
     // Check limits
     if (this.pendingCommands.size >= this.config.maxPendingCommands) {
       onError(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
-        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        JSONRPCErrorCode.RESOURCE_LIMIT_EXCEEDED,
         `Too many pending commands: Maximum ${this.config.maxPendingCommands} commands allowed`
       )));
       return;
@@ -236,7 +236,7 @@ export class ResponseTracker extends EventEmitter {
     // Check for duplicate tracking
     if (this.pendingCommands.has(commandId)) {
       onError(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
-        JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+        JSONRPCErrorCode.INVALID_REQUEST,
         `Command already being tracked: Command ${commandId} is already awaiting response`
       )));
       return;
@@ -356,7 +356,7 @@ export class ResponseTracker extends EventEmitter {
     this.emit('cleanup', commandId);
 
     const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
-      JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
+      JSONRPCErrorCode.HANDLER_TIMEOUT,
       `Command ${commandId} timed out after ${pending.timeout} seconds`
     ));
     pending.reject(error);

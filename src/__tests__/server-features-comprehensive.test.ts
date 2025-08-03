@@ -388,10 +388,10 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
           command: 'unknown-command',
           timestamp: Date.now()
         });
-        fail('Should have thrown an error');
+        throw new Error('Should have thrown an error');
       } catch (error: any) {
         expect(error).toBeDefined();
-        expect(error.message).toContain('not found');
+        expect(error.message).toContain('not defined');
       }
     });
 

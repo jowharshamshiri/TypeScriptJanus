@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as unixDgram from 'unix-dgram';
-import * as dgram from 'dgram';
+// import * as dgram from 'dgram'; // Not needed, using unix-dgram instead
 import { JanusServer } from '../server/janus-server';
 
 import { JanusCommand, JanusResponse } from '../types/protocol';
@@ -15,13 +15,26 @@ describe('Server Features', () => {
   let tempDir: string;
   
   beforeEach(() => {
+    console.log('🔍 beforeEach: Setting up tempDir...');
     tempDir = path.join(__dirname, '..', '..', 'tmp', `server-test-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+    console.log('🔍 beforeEach: tempDir path:', tempDir);
     fs.mkdirSync(tempDir, { recursive: true });
+    console.log('🔍 beforeEach: tempDir created');
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    console.log('🔍 afterEach: Cleaning up tempDir...');
     if (fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      try {
+        // Add a small delay to ensure any open file handles are closed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        console.log('🔍 afterEach: tempDir cleaned up');
+      } catch (error) {
+        console.log('🔍 afterEach: Cleanup error:', error);
+      }
+    } else {
+      console.log('🔍 afterEach: tempDir does not exist');
     }
   });
 
@@ -45,62 +58,95 @@ describe('Server Features', () => {
     timeout: number = 2000
   ): Promise<JanusResponse> {
     return new Promise((resolve, reject) => {
+      console.log('🔍 sendCommandAndWait: Starting...');
+      
       // Create response socket
       const responseSocketPath = path.join(tempDir, `response-${command.id}.sock`);
-      const responseSocket = dgram.createSocket({ type: 'unix_dgram' } as any);
+      console.log('🔍 sendCommandAndWait: Response socket path:', responseSocketPath);
+      
+      const responseSocket = unixDgram.createSocket('unix_dgram');
+      console.log('🔍 sendCommandAndWait: Response socket created');
       
       let responseReceived = false;
+      let socketClosed = false;
+      
+      const cleanup = () => {
+        if (!socketClosed) {
+          console.log('🔍 sendCommandAndWait: Cleaning up...');
+          socketClosed = true;
+          responseSocket.close();
+          try { 
+            fs.unlinkSync(responseSocketPath); 
+          } catch (e) {
+            console.log('🔍 sendCommandAndWait: Cleanup error (ignored):', e);
+          }
+        }
+      };
+      
       const timer = setTimeout(() => {
         if (!responseReceived) {
-          responseSocket.close();
-          try { fs.unlinkSync(responseSocketPath); } catch {}
+          console.log('🔍 sendCommandAndWait: Timeout reached');
+          cleanup();
           reject(new Error('Timeout waiting for response'));
         }
       }, timeout);
 
-      responseSocket.bind({ address: responseSocketPath } as any, () => {
-        responseSocket.on('message', (data) => {
+      console.log('🔍 sendCommandAndWait: Binding response socket...');
+      try {
+        responseSocket.bind(responseSocketPath);
+        console.log('🔍 sendCommandAndWait: Response socket bound successfully');
+      } catch (error) {
+        console.log('🔍 sendCommandAndWait: Response socket bind error:', error);
+        cleanup();
+        reject(error);
+        return;
+      }
+      
+      responseSocket.on('message', (data) => {
+        console.log('🔍 sendCommandAndWait: Message received:', data.toString());
+        responseReceived = true;
+        clearTimeout(timer);
+        cleanup();
+        
+        try {
+          const response: JanusResponse = JSON.parse(data.toString());
+          resolve(response);
+        } catch (error) {
+          reject(new Error(`Failed to parse response: ${error}`));
+        }
+      });
+
+      responseSocket.on('error', (error) => {
+        console.log('🔍 sendCommandAndWait: Response socket error:', error);
+        if (!responseReceived) {
+          cleanup();
+          reject(error);
+        }
+      });
+
+      // Create command with response socket path
+      const commandWithResponse: JanusCommand = {
+        ...command,
+        reply_to: responseSocketPath
+      };
+
+      console.log('🔍 sendCommandAndWait: Sending command:', JSON.stringify(commandWithResponse));
+
+      // Send command via SOCK_DGRAM
+      const clientSocket = unixDgram.createSocket('unix_dgram');
+      const commandData = Buffer.from(JSON.stringify(commandWithResponse));
+      
+      clientSocket.send(commandData, 0, commandData.length, socketPath, (error) => {
+        console.log('🔍 sendCommandAndWait: Send callback called, error:', error);
+        clientSocket.close();
+        if (error) {
           responseReceived = true;
           clearTimeout(timer);
-          responseSocket.close();
-          try {
-            fs.unlinkSync(responseSocketPath);
-          } catch (e) {
-            // Ignore cleanup errors
-          }
-          
-          try {
-            const response: JanusResponse = JSON.parse(data.toString());
-            resolve(response);
-          } catch (error) {
-            reject(new Error(`Failed to parse response: ${error}`));
-          }
-        });
-
-        // Create command with response socket path
-        const commandWithResponse: JanusCommand = {
-          ...command,
-          reply_to: responseSocketPath
-        };
-
-        // Send command via SOCK_DGRAM
-        const clientSocket = unixDgram.createSocket('unix_dgram');
-        const commandData = Buffer.from(JSON.stringify(commandWithResponse));
-        
-        clientSocket.send(commandData, 0, commandData.length, socketPath, (error) => {
-          clientSocket.close();
-          if (error) {
-            responseReceived = true;
-            clearTimeout(timer);
-            responseSocket.close();
-            try {
-              fs.unlinkSync(responseSocketPath);
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-            reject(error);
-          }
-        });
+          cleanup();
+          reject(error);
+        } else {
+          console.log('🔍 sendCommandAndWait: Command sent successfully, waiting for response...');
+        }
       });
     });
   }
@@ -413,15 +459,10 @@ describe('Server Features', () => {
 
       // Create dummy socket file
       fs.writeFileSync(socketPath, '');
-
-      // Verify file exists
       expect(fs.existsSync(socketPath)).toBe(true);
 
       // Create server with cleanup enabled
-      const config = {
-        socketPath
-      };
-      const server = new JanusServer(config);
+      const server = new JanusServer({ socketPath });
 
       // Start server (should cleanup existing file)
       await server.listen();
@@ -444,8 +485,6 @@ describe('Server Features', () => {
 
       // Verify cleanup on shutdown
       expect(fs.existsSync(socketPath)).toBe(false);
-
-      console.log('✅ Socket file cleanup validated');
     }, 10000);
   });
 });

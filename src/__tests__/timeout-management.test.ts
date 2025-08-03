@@ -4,7 +4,7 @@
  */
 
 import { ResponseTracker } from '../core/response-tracker';
-import { JSONRPCError } from '../types/jsonrpc-error';
+import { JSONRPCErrorClass } from '../types/jsonrpc-error';
 import { JanusResponse } from '../types/protocol';
 
 describe('Timeout Management', () => {
@@ -39,7 +39,7 @@ describe('Timeout Management', () => {
           done(new Error('Should not resolve - should timeout'));
         },
         (error) => {
-          expect(error.message).toContain('timeout');
+          expect(error.message).toContain('Handler timeout');
           expect(timeoutCalled).toBe(true);
           done();
         },
@@ -202,7 +202,7 @@ describe('Timeout Management', () => {
         commandId,
         () => {},
         (error) => {
-          expect(error.message).toContain('timeout');
+          expect(error.message).toContain('Handler timeout');
           
           // Cleanup should be called after timeout
           setTimeout(() => {
@@ -335,7 +335,7 @@ describe('Timeout Management', () => {
         },
         (error) => {
           expect(error).toBeInstanceOf(Error);
-          expect(error.message).toContain('already being tracked');
+          expect(error.message).toContain('Invalid Request');
           done();
         },
         5.0
@@ -359,8 +359,8 @@ describe('Timeout Management', () => {
           done(new Error('Should not resolve - should reject limit exceeded'));
         },
         (error) => {
-          expect(error).toBeInstanceOf(JSONRPCError);
-          expect(error.message).toContain('Too many pending commands');
+          expect(error).toBeInstanceOf(JSONRPCErrorClass);
+          expect(error.message).toContain('Resource limit exceeded');
           limitedTracker.shutdown();
           done();
         },
@@ -381,7 +381,7 @@ describe('Timeout Management', () => {
           done(new Error('Request should not resolve - should timeout'));
         },
         (error) => {
-          expect(error.message).toContain('timeout');
+          expect(error.message).toContain('Handler timeout');
           requestTimeoutCalled = true;
           if (responseTimeoutCalled) {
             done();
@@ -391,7 +391,7 @@ describe('Timeout Management', () => {
           done(new Error('Response should not resolve - should timeout'));
         },
         (error) => {
-          expect(error.message).toContain('timeout');
+          expect(error.message).toContain('Handler timeout');
           responseTimeoutCalled = true;
           if (requestTimeoutCalled) {
             done();
@@ -500,7 +500,7 @@ describe('Timeout Management', () => {
         },
         (error) => {
           expect(error).toBeInstanceOf(Error);
-          expect(error.message).toContain('already being tracked');
+          expect(error.message).toContain('Invalid Request');
           done();
         },
         5.0
@@ -557,8 +557,8 @@ describe('Timeout Management', () => {
           done(new Error('Should not call reject - should call error handler'));
         },
         (error) => {
-          expect(error).toBeInstanceOf(JSONRPCError);
-          expect(error.message).toContain('Too many pending commands');
+          expect(error).toBeInstanceOf(JSONRPCErrorClass);
+          expect(error.message).toContain('Resource limit exceeded');
           limitedTracker.shutdown();
           done();
         },
