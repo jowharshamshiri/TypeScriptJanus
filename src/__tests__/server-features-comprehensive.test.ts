@@ -391,7 +391,7 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
         throw new Error('Should have thrown an error');
       } catch (error: any) {
         expect(error).toBeDefined();
-        expect(error.message).toContain('not defined');
+        expect(error.code).toBe(-32601); // METHOD_NOT_FOUND
       }
     });
 
@@ -461,15 +461,15 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
       }
 
       const clientActivity = server.getClientActivity();
-      expect(clientActivity.length).toBeGreaterThan(0);
+      expect(clientActivity.length).toBe(3); // Each SOCK_DGRAM command creates a new ephemeral socket = new client
       
-      const activity = clientActivity[0];
-      expect(activity).toBeDefined();
-      if (activity) {
-        expect(activity.commandCount).toBeGreaterThanOrEqual(3);
+      // Verify that all activities have the expected properties
+      clientActivity.forEach(activity => {
+        expect(activity).toBeDefined();
+        expect(activity.commandCount).toBe(1); // Each ephemeral socket sends exactly 1 command
         expect(activity.lastActivity.getTime()).toBeGreaterThanOrEqual(startTime);
         expect(activity.address).toBeDefined();
-      }
+      });
     });
 
     it('should emit clientActivity events with timestamps', async () => {

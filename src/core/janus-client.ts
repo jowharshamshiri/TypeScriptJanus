@@ -101,7 +101,20 @@ export class JanusClient extends EventEmitter {
           try {
             const response: JanusResponse = JSON.parse(data.toString());
             cleanup();
-            resolve(response);
+            
+            // Check if response indicates an error
+            if (!response.success && response.error) {
+              const error = new JanusClientError(
+                response.error.message || 'Command failed',
+                'SERVER_ERROR',
+                response.error.data?.details
+              );
+              // Add numeric code property for test compatibility
+              (error as any).code = response.error.code;
+              reject(error);
+            } else {
+              resolve(response);
+            }
           } catch (err) {
             cleanup();
             reject(new JanusClientError(

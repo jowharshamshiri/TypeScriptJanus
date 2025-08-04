@@ -294,14 +294,24 @@ export class JanusServer extends EventEmitter {
     } catch (error) {
       // Send error response
       if (command.reply_to) {
-        const errorCode = error instanceof Error && error.message.includes('timeout') 
-          ? JSONRPCErrorCode.HANDLER_TIMEOUT 
-          : JSONRPCErrorCode.INTERNAL_ERROR;
+        let jsonrpcError: any;
+        
+        // Check if error is already a JSONRPCError object
+        if (error && typeof error === 'object' && 'code' in error && 'message' in error && typeof error.code === 'number') {
+          jsonrpcError = error;
+        } else {
+          // Convert other errors to JSONRPCError
+          const errorCode = error instanceof Error && error.message.includes('timeout') 
+            ? JSONRPCErrorCode.HANDLER_TIMEOUT 
+            : JSONRPCErrorCode.INTERNAL_ERROR;
+            
+          jsonrpcError = JSONRPCErrorBuilder.create(errorCode, error instanceof Error ? error.message : String(error));
+        }
           
         await this.sendErrorResponse(
           command.reply_to,
           command.id,
-          JSONRPCErrorBuilder.create(errorCode, error instanceof Error ? error.message : String(error))
+          jsonrpcError
         );
       }
     } finally {
@@ -322,7 +332,7 @@ export class JanusServer extends EventEmitter {
       if (builtinResult !== null) {
         return builtinResult;
       }
-      throw new Error(`Channel '${command.channelId}' not found`);
+      throw JSONRPCErrorBuilder.create(JSONRPCErrorCode.METHOD_NOT_FOUND, `Channel '${command.channelId}' not found`);
     }
 
     const handler = channelHandlers.get(command.command);
@@ -333,7 +343,7 @@ export class JanusServer extends EventEmitter {
         return builtinResult;
       }
       
-      throw new Error(`Command '${command.command}' not found in channel '${command.channelId}'`);
+      throw JSONRPCErrorBuilder.create(JSONRPCErrorCode.METHOD_NOT_FOUND, `Command '${command.command}' not found in channel '${command.channelId}'`);
     }
 
     // Execute handler
@@ -413,15 +423,6 @@ export class JanusServer extends EventEmitter {
       
       if (responseData.length > this.config.maxMessageSize) {
         reject(new Error(`Response too large: ${responseData.length} bytes`));
-        return;
-      }
-
-      // Check if target socket path exists before attempting to send
-      const fs = require('fs');
-      if (!fs.existsSync(targetPath)) {
-        // Client socket was cleaned up - this is normal behavior in test environments
-        // Resolve silently to avoid breaking server operation
-        resolve();
         return;
       }
 

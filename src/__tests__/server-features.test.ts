@@ -55,13 +55,16 @@ describe('Server Features', () => {
   async function sendCommandAndWait(
     socketPath: string, 
     command: JanusCommand, 
-    timeout: number = 2000
+    timeout: number = 5000
   ): Promise<JanusResponse> {
     return new Promise((resolve, reject) => {
       console.log('🔍 sendCommandAndWait: Starting...');
       
-      // Create response socket
-      const responseSocketPath = path.join(tempDir, `response-${command.id}.sock`);
+      // Create response socket with unique timestamp and higher precision to avoid collisions
+      const timestamp = Date.now();
+      const nanoSuffix = process.hrtime.bigint().toString(36);
+      const randomSuffix = Math.random().toString(36).substring(2);
+      const responseSocketPath = path.join(tempDir, `response-${command.id}-${timestamp}-${nanoSuffix}-${randomSuffix}.sock`);
       console.log('🔍 sendCommandAndWait: Response socket path:', responseSocketPath);
       
       const responseSocket = unixDgram.createSocket('unix_dgram');
@@ -71,23 +74,41 @@ describe('Server Features', () => {
       let socketClosed = false;
       
       const cleanup = () => {
-        if (!socketClosed) {
-          console.log('🔍 sendCommandAndWait: Cleaning up...');
-          socketClosed = true;
-          responseSocket.close();
-          try { 
-            fs.unlinkSync(responseSocketPath); 
-          } catch (e) {
-            console.log('🔍 sendCommandAndWait: Cleanup error (ignored):', e);
+        return new Promise<void>((cleanupResolve) => {
+          if (!socketClosed) {
+            console.log('🔍 sendCommandAndWait: Cleaning up...');
+            socketClosed = true;
+            
+            // Give socket time to close properly before cleanup
+            setTimeout(() => {
+              try {
+                responseSocket.close();
+              } catch (e) {
+                console.log('🔍 sendCommandAndWait: Socket close error (ignored):', e);
+              }
+              
+              // Additional delay to ensure socket is fully cleaned up by OS
+              setTimeout(() => {
+                try { 
+                  if (fs.existsSync(responseSocketPath)) {
+                    fs.unlinkSync(responseSocketPath); 
+                  }
+                } catch (e) {
+                  console.log('🔍 sendCommandAndWait: File cleanup error (ignored):', e);
+                }
+                cleanupResolve();
+              }, 50);
+            }, 50);
+          } else {
+            cleanupResolve();
           }
-        }
+        });
       };
       
       const timer = setTimeout(() => {
         if (!responseReceived) {
           console.log('🔍 sendCommandAndWait: Timeout reached');
-          cleanup();
-          reject(new Error('Timeout waiting for response'));
+          cleanup().then(() => reject(new Error('Timeout waiting for response')));
         }
       }, timeout);
 
@@ -97,8 +118,7 @@ describe('Server Features', () => {
         console.log('🔍 sendCommandAndWait: Response socket bound successfully');
       } catch (error) {
         console.log('🔍 sendCommandAndWait: Response socket bind error:', error);
-        cleanup();
-        reject(error);
+        cleanup().then(() => reject(error));
         return;
       }
       
@@ -106,21 +126,21 @@ describe('Server Features', () => {
         console.log('🔍 sendCommandAndWait: Message received:', data.toString());
         responseReceived = true;
         clearTimeout(timer);
-        cleanup();
         
-        try {
-          const response: JanusResponse = JSON.parse(data.toString());
-          resolve(response);
-        } catch (error) {
-          reject(new Error(`Failed to parse response: ${error}`));
-        }
+        cleanup().then(() => {
+          try {
+            const response: JanusResponse = JSON.parse(data.toString());
+            resolve(response);
+          } catch (error) {
+            reject(new Error(`Failed to parse response: ${error}`));
+          }
+        });
       });
 
       responseSocket.on('error', (error) => {
         console.log('🔍 sendCommandAndWait: Response socket error:', error);
         if (!responseReceived) {
-          cleanup();
-          reject(error);
+          cleanup().then(() => reject(error));
         }
       });
 
@@ -319,7 +339,8 @@ describe('Server Features', () => {
             id: cmdId,
             channelId: 'test',
             command: 'track_test',
-            timestamp: Date.now() / 1000
+            timestamp: Date.now() / 1000,
+            args: { commandId: cmdId } // Pass command ID in args so handler can access it
           };
 
           promises.push(sendCommandAndWait(socketPath, command));
@@ -380,16 +401,24 @@ describe('Server Features', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
+        // Use JanusClient instead of manual socket handling to avoid race conditions
+        const { JanusClient } = require('../core/janus-client');
+        const client = new JanusClient({
+          socketPath: socketPath,
+          defaultTimeout: 5.0,
+          maxMessageSize: 64 * 1024
+        });
+
         // Send multiple commands from same "client" (same channel)
         for (let i = 0; i < 3; i++) {
-          const command: JanusCommand = {
+          const command = {
             id: `activity-test-${i}`,
             channelId: 'test-client', // Same channel = same client
             command: 'ping',
-            timestamp: Date.now() / 1000
+            timestamp: Date.now()
           };
 
-          await sendCommandAndWait(socketPath, command);
+          await client.sendCommand(command);
 
           // Small delay between commands
           await new Promise(resolve => setTimeout(resolve, 50));

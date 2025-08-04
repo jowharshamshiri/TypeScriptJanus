@@ -623,7 +623,7 @@ describe('JanusClient', () => {
       // This should fail with size validation error before attempting connection
       try {
         await client.sendCommand('custom_echo', largeArgs);
-        fail('Expected validation error for oversized message');
+        throw new Error('Expected validation error for oversized message');
       } catch (error) {
         // Check if it's a size-related error (implementation may vary)
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -643,7 +643,7 @@ describe('JanusClient', () => {
       // Test fire-and-forget with large message
       try {
         await client.sendCommandNoResponse('custom_echo', largeArgs);
-        fail('Expected validation error for oversized fire-and-forget message');
+        throw new Error('Expected validation error for oversized fire-and-forget message');
       } catch (error) {
         // Message size detection should work for both response and no-response commands
         const errorMessage = error instanceof Error ? error.message : String(error);
