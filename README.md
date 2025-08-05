@@ -23,25 +23,89 @@ npm install typescript-unix-sock-api
 
 ## Quick Start
 
+### API Specification (Manifest)
+
+Before creating servers or clients, you need a Manifest file defining your API:
+
+**my-api-spec.json:**
+```json
+{
+  "name": "My Application API",
+  "version": "1.0.0",
+  "description": "Example API for demonstration",
+  "channels": {
+    "default": {
+      "commands": {
+        "get_user": {
+          "description": "Retrieve user information",
+          "arguments": {
+            "user_id": {
+              "type": "string",
+              "required": true,
+              "description": "User identifier"
+            }
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "name": {"type": "string"},
+              "email": {"type": "string"}
+            }
+          }
+        },
+        "update_profile": {
+          "description": "Update user profile",
+          "arguments": {
+            "user_id": {"type": "string", "required": true},
+            "name": {"type": "string", "required": false},
+            "email": {"type": "string", "required": false}
+          },
+          "response": {
+            "type": "object",
+            "properties": {
+              "success": {"type": "boolean"},
+              "updated_fields": {"type": "array"}
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Note**: Built-in commands (`ping`, `echo`, `get_info`, `validate`, `slow_process`, `spec`) are always available and cannot be overridden in Manifests.
+
 ### Simple Client Example
 
 ```typescript
 import { JanusClient } from 'typescript-unix-sock-api';
 
 async function main() {
-  // Create client with automatic Manifest fetching
+  // Create client - specification is fetched automatically from server
   const client = await JanusClient.create({
-    socketPath: '/tmp/my_socket.sock',
-    channelId: 'my_channel'
+    socketPath: '/tmp/my-server.sock',
+    channelId: 'default'
   });
 
-  // Send command - ID management is automatic
-  const args = {
-    message: 'Hello World'
+  // Built-in commands (always available)
+  const response = await client.sendCommand('ping');
+  if (response.success) {
+    console.log('Server ping:', response.result);
+  }
+
+  // Custom command defined in Manifest (arguments validated automatically)
+  const userArgs = {
+    user_id: 'user123'
   };
 
-  const response = await client.sendCommand('echo', args);
-  console.log('Response:', response);
+  const userResponse = await client.sendCommand('get_user', userArgs);
+  if (userResponse.success) {
+    console.log('User data:', userResponse.result);
+  } else {
+    console.log('Error:', userResponse.error);
+  }
 }
 
 main().catch(console.error);
@@ -95,61 +159,110 @@ async function main() {
 main().catch(console.error);
 ```
 
-### Server Example
+### Server Usage
 
 ```typescript
-import { JanusServer } from 'typescript-unix-sock-api';
+import { JanusServer, JSONRPCError } from 'typescript-unix-sock-api';
+import manifest from './my-api-spec.json';
 
-const server = new JanusServer({
-  socketPath: '/tmp/my_socket.sock',
-  maxConnections: 100,
-  defaultTimeout: 30.0
-});
+async function main() {
+  // Load API specification from Manifest file
+  const server = await JanusServer.fromManifestFile('my-api-spec.json');
+  
+  // Register handlers for commands defined in the Manifest
+  server.registerCommandHandler('default', 'get_user', async (args) => {
+    if (!args.user_id) {
+      throw new JSONRPCError(-32602, 'Missing user_id argument');
+    }
+    
+    // Simulate user lookup
+    return {
+      id: args.user_id,
+      name: 'John Doe',
+      email: 'john@example.com'
+    };
+  });
+  
+  server.registerCommandHandler('default', 'update_profile', async (args) => {
+    if (!args.user_id) {
+      throw new JSONRPCError(-32602, 'Missing user_id argument');
+    }
+    
+    const updatedFields = [];
+    if (args.name) updatedFields.push('name');
+    if (args.email) updatedFields.push('email');
+    
+    return {
+      success: true,
+      updated_fields: updatedFields
+    };
+  });
+  
+  // Start listening (blocks until stopped)
+  await server.startListening('/tmp/my-server.sock');
+  console.log('Server listening on /tmp/my-server.sock...');
+}
 
-// Register command handlers - returns direct values
-server.registerCommandHandler('my_channel', 'echo', async (args) => {
-  if (!args.message) {
-    throw new JSONRPCError(-32602, 'message parameter required');
+main().catch(console.error);
+```
+
+### Client Usage
+
+```typescript
+import { JanusClient } from 'typescript-unix-sock-api';
+
+async function main() {
+  // Create client - specification is fetched automatically from server
+  const client = await JanusClient.create({
+    socketPath: '/tmp/my-server.sock',
+    channelId: 'default'
+  });
+
+  // Built-in commands (always available)
+  const response = await client.sendCommand('ping');
+  if (response.success) {
+    console.log('Server ping:', response.result);
+  }
+
+  // Custom command defined in Manifest (arguments validated automatically)
+  const userArgs = {
+    user_id: 'user123'
+  };
+
+  const userResponse = await client.sendCommand('get_user', userArgs);
+  if (userResponse.success) {
+    console.log('User data:', userResponse.result);
+  } else {
+    console.log('Error:', userResponse.error);
   }
   
-  // Return direct value - no dictionary wrapping needed
-  return {
-    echo: args.message,
-    timestamp: Date.now()
+  // Fire-and-forget command (no response expected)
+  const logArgs = {
+    level: 'info',
+    message: 'User profile updated'
   };
-});
-
-// Register async handler
-server.registerCommandHandler('my_channel', 'process_data', async (args) => {
-  if (!args.data) {
-    throw new JSONRPCError(-32602, 'data parameter required');
-  }
   
-  // Simulate async processing
-  await new Promise(resolve => setTimeout(resolve, 100));
+  await client.sendCommandNoResponse('log_event', logArgs);
   
-  return {
-    result: `Processed: ${args.data}`,
-    processed_at: Math.floor(Date.now() / 1000)
-  };
-});
+  // Get server API specification
+  const specResponse = await client.sendCommand('spec');
+  console.log('Server API spec:', specResponse.result);
+}
 
-// Start listening
-await server.startListening();
-console.log('Server listening on /tmp/my_socket.sock...');
+main().catch(console.error);
 ```
 
 ### Fire-and-Forget Commands
 
 ```typescript
 // Send command without waiting for response
-const args = {
-  event: 'user_login',
-  user_id: '12345'
+const logArgs = {
+  level: 'info',
+  message: 'User profile updated'
 };
 
 try {
-  await client.sendCommandNoResponse('log_event', args);
+  await client.sendCommandNoResponse('log_event', logArgs);
   console.log('Event logged successfully');
 } catch (error) {
   console.log('Failed to log event:', error);
@@ -203,22 +316,21 @@ const config: JanusClientConfig = {
 const client = await JanusClient.create(config);
 ```
 
-## Manifest Support
-
-The TypeScript implementation supports JSON-based Manifests for validation and documentation:
+## Configuration
 
 ```typescript
-import { APIClient } from 'typescript-unix-sock-api';
-import manifest from './my-manifest.json';
+import { JanusClient, JanusClientConfig } from 'typescript-unix-sock-api';
 
-const client = new APIClient({
-  socketPath: '/tmp/my-app.sock',
-  manifest,
-  validateAgainstSpec: true  // Enable automatic validation
-});
+const config: JanusClientConfig = {
+  socketPath: '/tmp/my-server.sock',
+  channelId: 'default',
+  maxMessageSize: 10 * 1024 * 1024, // 10MB
+  defaultTimeout: 30,
+  datagramTimeout: 5,
+  enableValidation: true
+};
 
-// Commands are automatically validated against the specification
-await client.executeCommand('user-service', 'create-user', args);
+const client = await JanusClient.create(config);
 ```
 
 ## Security Features
