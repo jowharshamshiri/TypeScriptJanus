@@ -1,14 +1,17 @@
 # TypeScript Janus
 
-TypeScript implementation of the Janus Protocol providing cross-platform inter-process communication with comprehensive security validation and async patterns.
+TypeScript implementation of the Janus Protocol providing **SOCK_DGRAM connectionless communication** with automatic ID management and full type safety.
 
 ## Features
 
-- **Full Protocol Compatibility**: 100% compatible with Go, Rust, and Swift implementations
-- **Async/Await Support**: Modern TypeScript async patterns throughout
-- **Comprehensive Security**: 25+ security validation mechanisms
-- **Type Safety**: Full TypeScript type definitions for all protocol components
-- **Manifest Support**: JSON schema-based API validation and documentation
+- **Connectionless SOCK_DGRAM**: Unix domain datagram sockets with reply-to mechanism
+- **Automatic ID Management**: RequestHandle system hides UUID complexity from users
+- **Modern TypeScript**: Native async/await patterns with full type safety
+- **Cross-Language Compatibility**: Perfect compatibility with Go, Rust, and Swift implementations
+- **Dynamic Specification**: Server-provided Manifests with auto-fetch validation
+- **Security Framework**: 27 comprehensive security mechanisms and attack prevention
+- **JSON-RPC 2.0 Compliance**: Standardized error codes and response format
+- **Type Safety**: Complete TypeScript definitions for all protocol components
 - **High-Level API Client**: Convenient abstraction for common use cases
 - **Cross-Platform Testing**: Validated against all other language implementations
 
@@ -20,65 +23,184 @@ npm install typescript-unix-sock-api
 
 ## Quick Start
 
+### Simple Client Example
+
+```typescript
+import { JanusClient } from 'typescript-unix-sock-api';
+
+async function main() {
+  // Create client with automatic Manifest fetching
+  const client = await JanusClient.create({
+    socketPath: '/tmp/my_socket.sock',
+    channelId: 'my_channel'
+  });
+
+  // Send command - ID management is automatic
+  const args = {
+    message: 'Hello World'
+  };
+
+  const response = await client.sendCommand('echo', args);
+  console.log('Response:', response);
+}
+
+main().catch(console.error);
+```
+
+### Advanced Request Tracking
+
+```typescript
+import { JanusClient, RequestHandle, RequestStatus } from 'typescript-unix-sock-api';
+
+async function main() {
+  const client = await JanusClient.create({
+    socketPath: '/tmp/my_socket.sock',
+    channelId: 'my_channel'
+  });
+
+  const args = {
+    data: 'processing_task'
+  };
+
+  // Send command with RequestHandle for tracking
+  const { handle, responsePromise } = await client.sendCommandWithHandle(
+    'process_data',
+    args,
+    30 // timeout in seconds
+  );
+
+  console.log(`Request started: ${handle.getCommand()} on channel ${handle.getChannel()}`);
+
+  // Can check status or cancel if needed
+  if (handle.isCancelled()) {
+    console.log('Request was cancelled');
+    return;
+  }
+
+  // Wait for response with timeout handling
+  try {
+    const response = await Promise.race([
+      responsePromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('timeout')), 10000)
+      )
+    ]);
+    console.log('Success:', response);
+  } catch (error) {
+    client.cancelRequest(handle);
+    console.log('Request failed or cancelled:', error);
+  }
+}
+
+main().catch(console.error);
+```
+
 ### Server Example
 
 ```typescript
 import { JanusServer } from 'typescript-unix-sock-api';
 
 const server = new JanusServer({
-  socketPath: '/tmp/my-app.sock',
+  socketPath: '/tmp/my_socket.sock',
   maxConnections: 100,
   defaultTimeout: 30.0
 });
 
-// Register command handlers
-server.registerCommandHandler('user-service', 'create-user', async (args) => {
-  const user = await createUser(args.username, args.email);
-  return { userId: user.id, status: 'created' };
+// Register command handlers - returns direct values
+server.registerCommandHandler('my_channel', 'echo', async (args) => {
+  if (!args.message) {
+    throw new JSONRPCError(-32602, 'message parameter required');
+  }
+  
+  // Return direct value - no dictionary wrapping needed
+  return {
+    echo: args.message,
+    timestamp: Date.now()
+  };
+});
+
+// Register async handler
+server.registerCommandHandler('my_channel', 'process_data', async (args) => {
+  if (!args.data) {
+    throw new JSONRPCError(-32602, 'data parameter required');
+  }
+  
+  // Simulate async processing
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  return {
+    result: `Processed: ${args.data}`,
+    processed_at: Math.floor(Date.now() / 1000)
+  };
 });
 
 // Start listening
 await server.startListening();
-console.log('Server listening on /tmp/my-app.sock');
+console.log('Server listening on /tmp/my_socket.sock...');
 ```
 
-### Client Example
+### Fire-and-Forget Commands
 
 ```typescript
-import { APIClient } from 'typescript-unix-sock-api';
+// Send command without waiting for response
+const args = {
+  event: 'user_login',
+  user_id: '12345'
+};
 
-const client = new APIClient({
-  socketPath: '/tmp/my-app.sock',
-  defaultTimeout: 10.0
-});
-
-// Connect and execute commands
-await client.connect();
-
-const result = await client.executeCommand('user-service', 'create-user', {
-  username: 'john_doe',
-  email: 'john@example.com'
-});
-
-console.log('User created:', result);
-await client.disconnect();
+try {
+  await client.sendCommandNoResponse('log_event', args);
+  console.log('Event logged successfully');
+} catch (error) {
+  console.log('Failed to log event:', error);
+}
 ```
 
-### Channel Proxy Example
+## RequestHandle Management
 
 ```typescript
-// Use channel-specific proxy for cleaner code
-const userService = client.channel('user-service');
+// Get all pending requests
+const handles = client.getPendingRequests();
+console.log(`Pending requests: ${handles.length}`);
 
-const user = await userService.execute('create-user', {
-  username: 'jane_doe',
-  email: 'jane@example.com'
-});
+for (const handle of handles) {
+  console.log(`Request: ${handle.getCommand()} on ${handle.getChannel()} (created: ${handle.getTimestamp()})`);
+  
+  // Check status
+  const status = client.getRequestStatus(handle);
+  switch (status) {
+    case RequestStatus.Pending:
+      console.log('Status: Still processing');
+      break;
+    case RequestStatus.Completed:
+      console.log('Status: Completed');
+      break;
+    case RequestStatus.Cancelled:
+      console.log('Status: Cancelled');
+      break;
+  }
+}
 
-const userInfo = await userService.execute('get-user', {
-  userId: user.userId,
-  includeProfile: true
-});
+// Cancel all pending requests
+const cancelled = client.cancelAllRequests();
+console.log(`Cancelled ${cancelled} requests`);
+```
+
+## Configuration
+
+```typescript
+import { JanusClient, JanusClientConfig } from 'typescript-unix-sock-api';
+
+const config: JanusClientConfig = {
+  socketPath: '/tmp/my_socket.sock',
+  channelId: 'my_channel',
+  maxMessageSize: 10 * 1024 * 1024, // 10MB
+  defaultTimeout: 30,
+  datagramTimeout: 5,
+  enableValidation: true
+};
+
+const client = await JanusClient.create(config);
 ```
 
 ## Manifest Support
@@ -219,24 +341,35 @@ interface ServerConfig extends ConnectionConfig {
 
 ## Error Handling
 
-All errors include standardized error codes:
+JSON-RPC 2.0 compliant error handling:
 
 ```typescript
+import { JSONRPCError } from 'typescript-unix-sock-api';
+
 try {
-  await client.executeCommand('user-service', 'create-user', args);
+  const response = await client.sendCommand('echo', args);
+  console.log('Success:', response);
 } catch (error) {
-  console.log(error.code);     // e.g., 'VALIDATION_FAILED'
-  console.log(error.message);  // Human-readable message
-  console.log(error.details);  // Additional context
+  if (error instanceof JSONRPCError) {
+    switch (error.code) {
+      case -32601:
+        console.log('Command not found:', error.message);
+        break;
+      case -32602:
+        console.log('Invalid parameters:', error.message);
+        break;
+      case -32603:
+        console.log('Internal error:', error.message);
+        break;
+      case -32005:
+        console.log('Validation failed:', error.message);
+        break;
+      default:
+        console.log(`Error ${error.code}: ${error.message}`);
+    }
+  }
 }
 ```
-
-Common error codes:
-- `VALIDATION_FAILED` - Input validation failure
-- `COMMAND_TIMEOUT` - Command execution timeout
-- `CONNECTION_ERROR` - Socket connection issues
-- `HANDLER_NOT_FOUND` - No handler for command
-- `SECURITY_VIOLATION` - Security validation failure
 
 ## Performance
 

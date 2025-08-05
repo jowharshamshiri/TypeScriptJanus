@@ -8,7 +8,9 @@ import { JanusClient as CoreJanusClient } from '../core/janus-client';
 import { 
   Manifest, 
   JanusCommand, 
-  JanusResponse
+  JanusResponse,
+  RequestHandle,
+  RequestStatus
 } from '../types/protocol';
 
 /**
@@ -55,6 +57,9 @@ export class JanusClient {
   private readonly janusClient: CoreJanusClient;
   private readonly defaultTimeout: number;
   private readonly enableValidation: boolean;
+  
+  // Request lifecycle management (automatic ID system)
+  private readonly requestRegistry = new Map<string, RequestHandle>();
 
   private constructor(config: JanusClientConfig, manifest?: Manifest) {
     this.socketPath = config.socketPath;
@@ -492,5 +497,91 @@ export class JanusClient {
 
     // SOCK_DGRAM doesn't actually register handlers, but validation passed
     // Handler parameter is accepted for backward compatibility but not used
+  }
+
+  // Automatic ID Management Methods (F0193-F0216)
+
+  /**
+   * Send command with handle - returns RequestHandle for tracking
+   * Hides UUID complexity from users while providing request lifecycle management
+   */
+  public async sendCommandWithHandle(
+    command: string,
+    args?: Record<string, any>,
+    timeout?: number
+  ): Promise<{ handle: RequestHandle; responsePromise: Promise<JanusResponse> }> {
+    // Generate internal UUID (hidden from user)
+    const commandId = uuidv4();
+    
+    // Create request handle for user
+    const handle = new RequestHandle(commandId, command, this.channelId);
+    
+    // Register the request handle
+    this.requestRegistry.set(commandId, handle);
+    
+    // Create promise for response
+    const responsePromise = (async () => {
+      try {
+        const response = await this.sendCommand(command, args, timeout);
+        return response;
+      } finally {
+        // Clean up request handle when done
+        this.requestRegistry.delete(commandId);
+      }
+    })();
+    
+    return { handle, responsePromise };
+  }
+
+  /**
+   * Get request status by handle
+   */
+  public getRequestStatus(handle: RequestHandle): RequestStatus {
+    if (handle.isCancelled()) {
+      return RequestStatus.Cancelled;
+    }
+    
+    if (this.requestRegistry.has(handle.getInternalID())) {
+      return RequestStatus.Pending;
+    }
+    
+    return RequestStatus.Completed;
+  }
+
+  /**
+   * Cancel request using handle
+   */
+  public cancelRequest(handle: RequestHandle): void {
+    if (handle.isCancelled()) {
+      throw new JanusClientError('Request already cancelled', 'ALREADY_CANCELLED');
+    }
+    
+    if (!this.requestRegistry.has(handle.getInternalID())) {
+      throw new JanusClientError('Request not found or already completed', 'REQUEST_NOT_FOUND');
+    }
+    
+    handle.markCancelled();
+    this.requestRegistry.delete(handle.getInternalID());
+  }
+
+  /**
+   * Get all pending request handles
+   */
+  public getPendingRequests(): RequestHandle[] {
+    return Array.from(this.requestRegistry.values());
+  }
+
+  /**
+   * Cancel all pending requests
+   */
+  public cancelAllRequests(): number {
+    const count = this.requestRegistry.size;
+    
+    for (const handle of this.requestRegistry.values()) {
+      handle.markCancelled();
+    }
+    
+    this.requestRegistry.clear();
+    return count;
   }
 }

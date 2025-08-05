@@ -48,6 +48,64 @@ export interface JanusResponse {
 
 // Legacy SocketError interface removed - replaced by JSONRPCError in jsonrpc-error.ts
 
+/**
+ * RequestHandle provides a user-friendly interface to track and manage requests
+ * Hides internal UUID complexity from users
+ */
+export class RequestHandle {
+  private readonly internalID: string;
+  private readonly command: string;
+  private readonly channel: string;
+  private readonly timestamp: Date;
+  private cancelled: boolean = false;
+
+  constructor(internalID: string, command: string, channel: string) {
+    this.internalID = internalID;
+    this.command = command;
+    this.channel = channel;
+    this.timestamp = new Date();
+  }
+
+  /** Get the command name for this request */
+  getCommand(): string {
+    return this.command;
+  }
+
+  /** Get the channel ID for this request */
+  getChannel(): string {
+    return this.channel;
+  }
+
+  /** Get when this request was created */
+  getTimestamp(): Date {
+    return this.timestamp;
+  }
+
+  /** Check if this request has been cancelled */
+  isCancelled(): boolean {
+    return this.cancelled;
+  }
+
+  /** Get the internal UUID (for internal use only) */
+  getInternalID(): string {
+    return this.internalID;
+  }
+
+  /** Mark this handle as cancelled (internal use only) */
+  markCancelled(): void {
+    this.cancelled = true;
+  }
+}
+
+/** RequestStatus represents the status of a tracked request */
+export enum RequestStatus {
+  Pending = 'pending',
+  Completed = 'completed',
+  Failed = 'failed',
+  Cancelled = 'cancelled',
+  Timeout = 'timeout'
+}
+
 export interface SocketMessage {
   /** Message type discriminator */
   type: 'command' | 'response';
