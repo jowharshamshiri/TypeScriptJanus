@@ -1,29 +1,13 @@
 {
-  "name": "typescript-unix-sock-api",
-  "version": "1.0.0",
-  "description": "TypeScript implementation of the Janus Protocol",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "dev": "ts-node src/index.ts",
-    "janus": "ts-node src/bin/janus.ts",
-    "docs:generate": "ts-node src/docs/api-doc-generator.ts",
-    "docs:serve": "node docs/generated/serve.js",
-    "lint": "eslint src/**/*.ts",
-    "clean": "rm -rf dist"
-  },
-  "keywords": [
-    "unix-socket",
-    "ipc",
-    "api",
-    "typescript",
-    "cross-platform"
-  ],
   "author": "Janus Project",
-  "license": "MIT",
+  "dependencies": {
+    "@types/yaml": "^1.9.6",
+    "commander": "^11.1.0",
+    "unix-dgram": "^2.0.6",
+    "uuid": "^9.0.0",
+    "yaml": "^2.8.0"
+  },
+  "description": "TypeScript implementation of the Janus Protocol",
   "devDependencies": {
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
@@ -36,13 +20,6 @@
     "ts-node": "^10.0.0",
     "typescript": "^5.0.0"
   },
-  "dependencies": {
-    "@types/yaml": "^1.9.6",
-    "commander": "^11.1.0",
-    "unix-dgram": "^2.0.6",
-    "uuid": "^9.0.0",
-    "yaml": "^2.8.0"
-  },
   "engines": {
     "node": ">=18.0.0"
   },
@@ -50,5 +27,28 @@
     "dist",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "keywords": [
+    "unix-socket",
+    "ipc",
+    "api",
+    "typescript",
+    "cross-platform"
+  ],
+  "license": "MIT",
+  "main": "dist/index.js",
+  "name": "typescript-unix-sock-api",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "dev": "ts-node src/index.ts",
+    "docs:generate": "ts-node src/docs/api-doc-generator.ts",
+    "docs:serve": "node docs/generated/serve.js",
+    "janus": "ts-node src/bin/janus.ts",
+    "lint": "eslint src/**/*.ts",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "types": "dist/index.d.ts",
+  "version": "0.20.25988"
 }
