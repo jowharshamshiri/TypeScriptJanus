@@ -95,10 +95,10 @@ export function createTestManifest() {
       test: {
         channel: "test",
         description: "Test channel",
-        commands: {
-          test_command: {
-            command: "test_command",
-            description: "Test command for server tests",
+        requests: {
+          test_request: {
+            request: "test_request",
+            description: "Test request for server tests",
             arguments: [
               {
                 name: "message",

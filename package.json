@@ -2,9 +2,10 @@
   "author": "Janus Project",
   "dependencies": {
     "@types/yaml": "^1.9.6",
-    "commander": "^11.1.0",
+    "commander": "^14.0.0",
+    "requester": "^11.1.0",
     "unix-dgram": "^2.0.6",
-    "uuid": "^9.0.0",
+    "uuid": "^9.0.1",
     "yaml": "^2.8.0"
   },
   "description": "TypeScript implementation of the Janus Protocol",

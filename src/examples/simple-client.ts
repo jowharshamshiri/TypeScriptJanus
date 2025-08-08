@@ -2,18 +2,18 @@
 
 /**
  * Simple client example for TypeScript Janus
- * Demonstrates basic client usage and command execution
+ * Demonstrates basic client usage and request execution (channel-free)
  */
 
 import { APIClient } from '../api/api-client';
 import * as path from 'path';
 import * as fs from 'fs';
 
-// Parse command line arguments
+// Parse request line arguments
 function parseArgs() {
   const args = process.argv.slice(2);
   let socketPath = path.join('/tmp', 'typescript-unix-sock-api-example.sock');
-  let specPath = path.join(__dirname, '../../..', 'example-manifest.json');
+  let manifestPath = path.join(__dirname, '../../..', 'example-manifest.json');
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -28,49 +28,53 @@ function parseArgs() {
       const nextArg = args[i + 1];
       if (nextArg) {
         socketPath = nextArg;
-        i++;
+        i++; // Skip next arg
       }
     }
-    // Handle --spec=value format
-    else if (arg.startsWith('--spec=')) {
-      specPath = arg.substring('--spec='.length);
+    // Handle --manifest=value format
+    else if (arg.startsWith('--manifest=')) {
+      manifestPath = arg.substring('--manifest='.length);
     }
-    // Handle --spec value format
-    else if (arg === '--spec' && i + 1 < args.length) {
+    // Handle --manifest value format
+    else if (arg === '--manifest' && i + 1 < args.length) {
       const nextArg = args[i + 1];
       if (nextArg) {
-        specPath = nextArg;
-        i++;
+        manifestPath = nextArg;
+        i++; // Skip next arg
       }
     }
   }
 
-  return { socketPath, specPath };
+  return { socketPath, manifestPath };
 }
 
-const { socketPath: SOCKET_PATH, specPath: MANIFEST_PATH } = parseArgs();
-
 async function main() {
-  console.log('🚀 Starting TypeScript Janus Client Example');
-  console.log(`📍 Socket path: ${SOCKET_PATH}`);
+  const { socketPath, manifestPath } = parseArgs();
+  
+  console.log('🚀 TypeScript Janus Simple Client');
+  console.log(`📡 Connecting to: ${socketPath}`);
+  console.log(`📋 Manifest path: ${manifestPath}`);
 
-  // Load Manifest
+  // Load manifest if it exists
   let manifest;
   try {
-    const manifestContent = await fs.promises.readFile(MANIFEST_PATH, 'utf8');
-    manifest = JSON.parse(manifestContent);
-    console.log(`📋 Loaded Manifest: ${manifest.name} v${manifest.version}`);
+    if (fs.existsSync(manifestPath)) {
+      const manifestData = fs.readFileSync(manifestPath, 'utf8');
+      manifest = JSON.parse(manifestData);
+      console.log('✅ Manifest loaded');
+    } else {
+      console.log('⚠️ Manifest file not found, proceeding without validation');
+    }
   } catch (error) {
-    console.warn(`⚠️ Could not load Manifest from ${MANIFEST_PATH}, continuing without validation`);
+    console.log('⚠️ Failed to load manifest:', error instanceof Error ? error.message : error);
   }
 
   // Create client
   const client = new APIClient({
-    socketPath: SOCKET_PATH,
+    socketPath,
     defaultTimeout: 10.0,
     manifest,
-    validateAgainstManifest: !!manifest,
-    autoReconnect: true
+    validateAgainstManifest: !!manifest
   });
 
   try {
@@ -82,19 +86,17 @@ async function main() {
     }
     console.log('✅ Server is reachable');
 
-    // Show available channels and commands
+    // Show available requests
     if (manifest) {
-      console.log('\n📋 Available channels and commands:');
-      for (const channelId of client.getAvailableChannels()) {
-        console.log(`   📁 ${channelId}:`);
-        for (const commandName of client.getAvailableCommands(channelId)) {
-          console.log(`      • ${commandName}`);
-        }
+      console.log('\n📋 Available requests:');
+      const availableRequests = client.getAvailableRequests();
+      for (const requestName of availableRequests) {
+        console.log(`      • ${requestName}`);
       }
     }
 
-    // Run example commands
-    await runExampleCommands(client);
+    // Run example requests
+    await runExampleRequests(client);
 
   } catch (error) {
     console.error('❌ Client error:', error);
@@ -104,119 +106,61 @@ async function main() {
   }
 }
 
-async function runExampleCommands(client: APIClient) {
-  console.log('\n🧪 Running example commands...\n');
+async function runExampleRequests(client: APIClient) {
+  console.log('\n🧪 Running example requests...\n');
 
   try {
+    // Test built-in requests first
+    console.log('1️⃣ Testing ping...');
+    const pingResult = await client.executeRequest('ping');
+    console.log('✅ Ping result:', JSON.stringify(pingResult, null, 2));
+
     // Test echo service
-    console.log('1️⃣ Testing echo service...');
-    const echoResult = await client.executeCommand('echo-service', 'echo', {
-      message: 'Hello from TypeScript client!',
-      timestamp: new Date().toISOString(),
-      data: { foo: 'bar', numbers: [1, 2, 3] }
+    console.log('\n2️⃣ Testing echo service...');
+    const echoResult = await client.executeRequest('echo', {
+      message: 'Hello from TypeScript client!'
     });
     console.log('✅ Echo result:', JSON.stringify(echoResult, null, 2));
 
-    // Test ping
-    console.log('\n2️⃣ Testing ping...');
-    const pingResult = await client.executeCommand('echo-service', 'ping');
-    console.log('✅ Ping result:', JSON.stringify(pingResult, null, 2));
+    // Test get_info
+    console.log('\n3️⃣ Testing get_info...');
+    const infoResult = await client.executeRequest('get_info');
+    console.log('✅ Info result:', JSON.stringify(infoResult, null, 2));
 
-    // Test user creation
-    console.log('\n3️⃣ Creating a user...');
-    const createUserResult = await client.executeCommand('user-service', 'create-user', {
-      username: 'typescript_user',
-      email: 'typescript@example.com',
-      password: 'secure_password_123',
-      role: 'user',
-      profile: {
-        firstName: 'TypeScript',
-        lastName: 'User',
-        age: 25,
-        bio: 'I love TypeScript and Unix sockets!',
-        location: 'Code Land'
+    // Test manifest request if available
+    const manifest = client.getManifest();
+    if (manifest && manifest.requests) {
+      const requestNames = Object.keys(manifest.requests);
+      if (requestNames.length > 0) {
+        console.log('\n4️⃣ Testing manifest requests...');
+        for (const requestName of requestNames.slice(0, 2)) { // Test up to 2 requests
+          try {
+            console.log(`Testing ${requestName}...`);
+            const result = await client.executeRequest(requestName, {});
+            console.log(`✅ ${requestName} result:`, JSON.stringify(result, null, 2));
+          } catch (error) {
+            console.log(`⚠️ ${requestName} failed:`, error instanceof Error ? error.message : error);
+          }
+        }
       }
-    });
-    console.log('✅ User created:', JSON.stringify(createUserResult, null, 2));
+    }
 
-    // Test user retrieval
-    console.log('\n4️⃣ Getting user information...');
-    const getUserResult = await client.executeCommand('user-service', 'get-user', {
-      userId: createUserResult.userId,
-      includeProfile: true
-    });
-    console.log('✅ User info:', JSON.stringify(getUserResult, null, 2));
-
-    // Test session validation
-    console.log('\n5️⃣ Validating session...');
-    const sessionResult = await client.executeCommand('session-service', 'validate-session', {
-      sessionToken: 'mock-jwt-token-' + Date.now()
-    });
-    console.log('✅ Session validation:', JSON.stringify(sessionResult, null, 2));
-
-    // Test parallel execution
-    console.log('\n6️⃣ Testing parallel command execution...');
-    const parallelResults = await client.executeCommands([
-      { channelId: 'echo-service', commandName: 'ping' },
-      { channelId: 'user-service', commandName: 'get-user', args: { username: 'john_doe' } },
-      { channelId: 'session-service', commandName: 'validate-session', args: { sessionToken: 'test-token' } }
+    // Test parallel execution with simplified requests
+    console.log('\n5️⃣ Testing parallel request execution...');
+    const parallelResults = await client.executeRequests([
+      { requestName: 'ping' },
+      { requestName: 'echo', args: { message: 'parallel test' } },
+      { requestName: 'get_info' }
     ]);
     console.log('✅ Parallel results:');
     parallelResults.forEach((result, index) => {
       console.log(`   ${index + 1}: ${JSON.stringify(result, null, 2)}`);
     });
 
-    // Test channel proxy
-    console.log('\n7️⃣ Testing channel proxy...');
-    const userChannel = client.channel('user-service');
-    const updateResult = await userChannel.execute('update-user', {
-      userId: createUserResult.userId,
-      updates: {
-        email: 'updated-typescript@example.com',
-        role: 'moderator'
-      }
-    });
-    console.log('✅ Update via channel proxy:', JSON.stringify(updateResult, null, 2));
-
-    // Test error handling
-    console.log('\n8️⃣ Testing error handling...');
-    try {
-      await client.executeCommand('user-service', 'delete-user', {
-        userId: createUserResult.userId,
-        confirmation: 'WRONG' // This should cause an error
-      });
-    } catch (error: any) {
-      console.log('✅ Expected error caught:', error.message);
-    }
-
-    // Proper deletion
-    console.log('\n9️⃣ Properly deleting user...');
-    const deleteResult = await client.executeCommand('user-service', 'delete-user', {
-      userId: createUserResult.userId,
-      confirmation: 'DELETE'
-    });
-    console.log('✅ User deleted:', JSON.stringify(deleteResult, null, 2));
-
-    // Test command validation (if Manifest is loaded)
-    if (client.getManifest()) {
-      console.log('\n🔟 Testing command validation...');
-      const validation = client.validateCommandArgs('user-service', 'create-user', {
-        username: 'test',
-        email: 'invalid-email', // This should fail validation
-        password: 'short' // This might fail validation too
-      });
-      
-      if (!validation.valid) {
-        console.log('✅ Validation correctly caught errors:', validation.errors);
-      } else {
-        console.log('⚠️ Validation passed unexpectedly');
-      }
-    }
-
-    console.log('\n🎉 All example commands completed successfully!');
+    console.log('\n🎉 All example requests completed successfully!');
 
   } catch (error: any) {
-    console.error(`❌ Error during command execution: ${error.message}`);
+    console.error(`❌ Error during request execution: ${error.message}`);
     if (error.code) {
       console.error(`   Code: ${error.code}`);
     }
@@ -228,8 +172,8 @@ async function runExampleCommands(client: APIClient) {
 
 // Only run if this file is executed directly
 if (require.main === module) {
-  main().catch((error) => {
-    console.error('💥 Fatal error:', error);
+  main().catch(error => {
+    console.error('❌ Fatal error:', error);
     process.exit(1);
   });
 }

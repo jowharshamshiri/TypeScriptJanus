@@ -8,7 +8,7 @@ TypeScript implementation of the Janus Protocol providing **SOCK_DGRAM connectio
 - **Automatic ID Management**: RequestHandle system hides UUID complexity from users
 - **Modern TypeScript**: Native async/await patterns with full type safety
 - **Cross-Language Compatibility**: Perfect compatibility with Go, Rust, and Swift implementations
-- **Dynamic Specification**: Server-provided Manifests with auto-fetch validation
+- **Dynamic Manifest**: Server-provided Manifests with auto-fetch validation
 - **Security Framework**: 27 comprehensive security mechanisms and attack prevention
 - **JSON-RPC 2.0 Compliance**: Standardized error codes and response format
 - **Type Safety**: Complete TypeScript definitions for all protocol components
@@ -23,11 +23,11 @@ npm install typescript-unix-sock-api
 
 ## Quick Start
 
-### API Specification (Manifest)
+### API Manifest (Manifest)
 
 Before creating servers or clients, you need a Manifest file defining your API:
 
-**my-api-spec.json:**
+**my-api-manifest.json:**
 ```json
 {
   "name": "My Application API",
@@ -35,7 +35,7 @@ Before creating servers or clients, you need a Manifest file defining your API:
   "description": "Example API for demonstration",
   "channels": {
     "default": {
-      "commands": {
+      "requests": {
         "get_user": {
           "description": "Retrieve user information",
           "arguments": {
@@ -75,7 +75,7 @@ Before creating servers or clients, you need a Manifest file defining your API:
 }
 ```
 
-**Note**: Built-in commands (`ping`, `echo`, `get_info`, `validate`, `slow_process`, `spec`) are always available and cannot be overridden in Manifests.
+**Note**: Built-in requests (`ping`, `echo`, `get_info`, `validate`, `slow_process`, `manifest`) are always available and cannot be overridden in Manifests.
 
 ### Simple Client Example
 
@@ -83,24 +83,24 @@ Before creating servers or clients, you need a Manifest file defining your API:
 import { JanusClient } from 'typescript-unix-sock-api';
 
 async function main() {
-  // Create client - specification is fetched automatically from server
+  // Create client - manifest is fetched automatically from server
   const client = await JanusClient.create({
     socketPath: '/tmp/my-server.sock',
     channelId: 'default'
   });
 
-  // Built-in commands (always available)
-  const response = await client.sendCommand('ping');
+  // Built-in requests (always available)
+  const response = await client.sendRequest('ping');
   if (response.success) {
     console.log('Server ping:', response.result);
   }
 
-  // Custom command defined in Manifest (arguments validated automatically)
+  // Custom request defined in Manifest (arguments validated automatically)
   const userArgs = {
     user_id: 'user123'
   };
 
-  const userResponse = await client.sendCommand('get_user', userArgs);
+  const userResponse = await client.sendRequest('get_user', userArgs);
   if (userResponse.success) {
     console.log('User data:', userResponse.result);
   } else {
@@ -126,14 +126,14 @@ async function main() {
     data: 'processing_task'
   };
 
-  // Send command with RequestHandle for tracking
-  const { handle, responsePromise } = await client.sendCommandWithHandle(
+  // Send request with RequestHandle for tracking
+  const { handle, responsePromise } = await client.sendRequestWithHandle(
     'process_data',
     args,
     30 // timeout in seconds
   );
 
-  console.log(`Request started: ${handle.getCommand()} on channel ${handle.getChannel()}`);
+  console.log(`Request started: ${handle.getRequest()} on channel ${handle.getChannel()}`);
 
   // Can check status or cancel if needed
   if (handle.isCancelled()) {
@@ -163,14 +163,14 @@ main().catch(console.error);
 
 ```typescript
 import { JanusServer, JSONRPCError } from 'typescript-unix-sock-api';
-import manifest from './my-api-spec.json';
+import manifest from './my-api-manifest.json';
 
 async function main() {
-  // Load API specification from Manifest file
-  const server = await JanusServer.fromManifestFile('my-api-spec.json');
+  // Load API manifest from Manifest file
+  const server = await JanusServer.fromManifestFile('my-api-manifest.json');
   
-  // Register handlers for commands defined in the Manifest
-  server.registerCommandHandler('default', 'get_user', async (args) => {
+  // Register handlers for requests defined in the Manifest
+  server.registerRequestHandler('default', 'get_user', async (args) => {
     if (!args.user_id) {
       throw new JSONRPCError(-32602, 'Missing user_id argument');
     }
@@ -183,7 +183,7 @@ async function main() {
     };
   });
   
-  server.registerCommandHandler('default', 'update_profile', async (args) => {
+  server.registerRequestHandler('default', 'update_profile', async (args) => {
     if (!args.user_id) {
       throw new JSONRPCError(-32602, 'Missing user_id argument');
     }
@@ -212,57 +212,57 @@ main().catch(console.error);
 import { JanusClient } from 'typescript-unix-sock-api';
 
 async function main() {
-  // Create client - specification is fetched automatically from server
+  // Create client - manifest is fetched automatically from server
   const client = await JanusClient.create({
     socketPath: '/tmp/my-server.sock',
     channelId: 'default'
   });
 
-  // Built-in commands (always available)
-  const response = await client.sendCommand('ping');
+  // Built-in requests (always available)
+  const response = await client.sendRequest('ping');
   if (response.success) {
     console.log('Server ping:', response.result);
   }
 
-  // Custom command defined in Manifest (arguments validated automatically)
+  // Custom request defined in Manifest (arguments validated automatically)
   const userArgs = {
     user_id: 'user123'
   };
 
-  const userResponse = await client.sendCommand('get_user', userArgs);
+  const userResponse = await client.sendRequest('get_user', userArgs);
   if (userResponse.success) {
     console.log('User data:', userResponse.result);
   } else {
     console.log('Error:', userResponse.error);
   }
   
-  // Fire-and-forget command (no response expected)
+  // Fire-and-forget request (no response expected)
   const logArgs = {
     level: 'info',
     message: 'User profile updated'
   };
   
-  await client.sendCommandNoResponse('log_event', logArgs);
+  await client.sendRequestNoResponse('log_event', logArgs);
   
-  // Get server API specification
-  const specResponse = await client.sendCommand('spec');
-  console.log('Server API spec:', specResponse.result);
+  // Get server API manifest
+  const manifestResponse = await client.sendRequest('manifest');
+  console.log('Server API manifest:', manifestResponse.result);
 }
 
 main().catch(console.error);
 ```
 
-### Fire-and-Forget Commands
+### Fire-and-Forget Requests
 
 ```typescript
-// Send command without waiting for response
+// Send request without waiting for response
 const logArgs = {
   level: 'info',
   message: 'User profile updated'
 };
 
 try {
-  await client.sendCommandNoResponse('log_event', logArgs);
+  await client.sendRequestNoResponse('log_event', logArgs);
   console.log('Event logged successfully');
 } catch (error) {
   console.log('Failed to log event:', error);
@@ -277,7 +277,7 @@ const handles = client.getPendingRequests();
 console.log(`Pending requests: ${handles.length}`);
 
 for (const handle of handles) {
-  console.log(`Request: ${handle.getCommand()} on ${handle.getChannel()} (created: ${handle.getTimestamp()})`);
+  console.log(`Request: ${handle.getRequest()} on ${handle.getChannel()} (created: ${handle.getTimestamp()})`);
   
   // Check status
   const status = client.getRequestStatus(handle);
@@ -348,7 +348,7 @@ The implementation includes comprehensive security validation:
 ### Core Components
 
 - **JanusClient**: Low-level socket client with async message handling
-- **JanusServer**: Server with command routing and handler management
+- **JanusServer**: Server with request routing and handler management
 - **APIClient**: High-level client with Manifest support
 - **SecurityValidator**: Comprehensive security validation framework
 - **MessageFraming**: 4-byte length prefix message framing
@@ -356,11 +356,11 @@ The implementation includes comprehensive security validation:
 
 ### Protocol Compatibility
 
-The TypeScript implementation follows the exact same protocol specification as other language implementations:
+The TypeScript implementation follows the exact same protocol manifest as other language implementations:
 
 - **Message Format**: 4-byte big-endian length prefix + JSON payload
 - **UUID Correlation**: v4 UUIDs for request/response correlation
-- **Async Patterns**: Non-blocking command execution with response tracking
+- **Async Patterns**: Non-blocking request execution with response tracking
 - **Error Handling**: Standardized error codes and response format
 
 ## Development
@@ -414,17 +414,17 @@ Test matrix includes:
 ### Core Types
 
 ```typescript
-interface JanusCommand {
+interface JanusRequest {
   id: string;              // UUID v4
   channelId: string;       // Channel identifier
-  command: string;         // Command name
-  args?: Record<string, any>; // Command arguments
+  request: string;         // Request name
+  args?: Record<string, any>; // Request arguments
   timeout?: number;        // Timeout in seconds
   timestamp: string;       // ISO 8601 timestamp
 }
 
 interface JanusResponse {
-  commandId: string;       // Correlates to command.id
+  requestId: string;       // Correlates to request.id
   channelId: string;       // Channel verification
   success: boolean;        // Success/failure flag
   result?: Record<string, any>; // Success result
@@ -438,10 +438,10 @@ interface JanusResponse {
 ```typescript
 interface ConnectionConfig {
   socketPath: string;           // Unix socket path
-  defaultTimeout?: number;      // Default command timeout (30s)
+  defaultTimeout?: number;      // Default request timeout (30s)
   maxMessageSize?: number;      // Max message size (10MB)
   connectionTimeout?: number;   // Connection timeout (10s)
-  maxPendingCommands?: number;  // Max pending commands (1000)
+  maxPendingRequests?: number;  // Max pending requests (1000)
 }
 
 interface ServerConfig extends ConnectionConfig {
@@ -459,13 +459,13 @@ JSON-RPC 2.0 compliant error handling:
 import { JSONRPCError } from 'typescript-unix-sock-api';
 
 try {
-  const response = await client.sendCommand('echo', args);
+  const response = await client.sendRequest('echo', args);
   console.log('Success:', response);
 } catch (error) {
   if (error instanceof JSONRPCError) {
     switch (error.code) {
       case -32601:
-        console.log('Command not found:', error.message);
+        console.log('Request not found:', error.message);
         break;
       case -32602:
         console.log('Invalid parameters:', error.message);
@@ -493,9 +493,9 @@ The TypeScript implementation is optimized for performance:
 - **Async Patterns**: Non-blocking operations throughout
 - **Memory Management**: Automatic cleanup and resource limits
 
-## Protocol Specification
+## Protocol Manifest
 
-This implementation follows the comprehensive [Janus Protocol Specification](../PROTOCOL.md) ensuring compatibility with all other language implementations.
+This implementation follows the comprehensive [Janus Protocol Manifest](../PROTOCOL.md) ensuring compatibility with all other language implementations.
 
 ## Contributing
 
@@ -503,7 +503,7 @@ This implementation follows the comprehensive [Janus Protocol Specification](../
 2. Add tests for new functionality
 3. Ensure cross-platform compatibility
 4. Update documentation for API changes
-5. Validate against protocol specification
+5. Validate against protocol manifest
 
 ## License
 

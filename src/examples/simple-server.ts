@@ -2,13 +2,13 @@
 
 /**
  * Simple server example for TypeScript Janus
- * Demonstrates basic server setup with command handlers
+ * Demonstrates basic server setup with request handlers
  */
 
 import { JanusServer } from '../server/janus-server';
 import * as path from 'path';
 
-// Parse command line arguments
+// Parse request line arguments
 function parseArgs() {
   const args = process.argv.slice(2);
   let socketPath = path.join('/tmp', 'typescript-unix-sock-api-example.sock');
@@ -48,8 +48,8 @@ async function main() {
     cleanupOnShutdown: true
   });
 
-  // Register command handlers
-  setupCommandHandlers(server);
+  // Register request handlers
+  setupRequestHandlers(server);
 
   // Setup event listeners
   setupEventListeners(server);
@@ -68,9 +68,9 @@ async function main() {
   setupGracefulShutdown(server);
 }
 
-function setupCommandHandlers(server: JanusServer) {
-  // User service commands
-  server.registerCommandHandler('user-service', 'create-user', async (args) => {
+function setupRequestHandlers(server: JanusServer) {
+  // User service requests
+  server.registerRequestHandler('user-service', 'create-user', async (args) => {
     console.log('📝 Creating user:', args);
     
     // Simulate user creation logic
@@ -93,7 +93,7 @@ function setupCommandHandlers(server: JanusServer) {
     };
   });
 
-  server.registerCommandHandler('user-service', 'get-user', async (args) => {
+  server.registerRequestHandler('user-service', 'get-user', async (args) => {
     console.log('🔍 Getting user:', args);
     
     // Simulate user lookup
@@ -121,7 +121,7 @@ function setupCommandHandlers(server: JanusServer) {
     };
   });
 
-  server.registerCommandHandler('user-service', 'update-user', async (args) => {
+  server.registerRequestHandler('user-service', 'update-user', async (args) => {
     console.log('✏️ Updating user:', args);
     
     // Simulate update logic
@@ -138,7 +138,7 @@ function setupCommandHandlers(server: JanusServer) {
     };
   });
 
-  server.registerCommandHandler('user-service', 'delete-user', async (args) => {
+  server.registerRequestHandler('user-service', 'delete-user', async (args) => {
     console.log('🗑️ Deleting user:', args);
     
     if (args.confirmation !== 'DELETE') {
@@ -154,8 +154,8 @@ function setupCommandHandlers(server: JanusServer) {
     };
   });
 
-  // Session service commands
-  server.registerCommandHandler('session-service', 'validate-session', async (args) => {
+  // Session service requests
+  server.registerRequestHandler('session-service', 'validate-session', async (args) => {
     console.log('🔑 Validating session:', args.sessionToken?.substring(0, 10) + '...');
     
     await new Promise(resolve => setTimeout(resolve, 30));
@@ -175,7 +175,7 @@ function setupCommandHandlers(server: JanusServer) {
     };
   });
 
-  server.registerCommandHandler('session-service', 'logout', async (args) => {
+  server.registerRequestHandler('session-service', 'logout', async (args) => {
     console.log('👋 Logging out session:', args.sessionToken?.substring(0, 10) + '...');
     
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -187,13 +187,13 @@ function setupCommandHandlers(server: JanusServer) {
   });
 
   // Echo service for testing
-  server.registerCommandHandler('echo-service', 'echo', async (args) => {
-    console.log('🔄 Echo command:', args);
+  server.registerRequestHandler('echo-service', 'echo', async (args) => {
+    console.log('🔄 Echo request:', args);
     return { echoed: args };
   });
 
-  server.registerCommandHandler('echo-service', 'ping', async () => {
-    console.log('🏓 Ping command');
+  server.registerRequestHandler('echo-service', 'ping', async () => {
+    console.log('🏓 Ping request');
     return { 
       pong: true, 
       timestamp: new Date().toISOString(),
@@ -205,7 +205,7 @@ function setupCommandHandlers(server: JanusServer) {
     };
   });
 
-  console.log('📋 Registered command handlers:');
+  console.log('📋 Registered request handlers:');
   console.log('   • user-service: create-user, get-user, update-user, delete-user');
   console.log('   • session-service: validate-session, logout');
   console.log('   • echo-service: echo, ping');
@@ -224,13 +224,13 @@ function setupEventListeners(server: JanusServer) {
     console.log(`🔌 Client disconnected: ${clientId}`);
   });
 
-  server.on('command', (command, clientId) => {
-    console.log(`📨 Command received from ${clientId}: ${command.channelId}.${command.command}`);
+  server.on('request', (request, clientId) => {
+    console.log(`📨 Request received from ${clientId}: ${request.channelId}.${request.request}`);
   });
 
   server.on('response', (response, clientId) => {
     const status = response.success ? '✅' : '❌';
-    console.log(`📤 Response sent to ${clientId}: ${status} ${response.commandId}`);
+    console.log(`📤 Response sent to ${clientId}: ${status} ${response.requestId}`);
   });
 
   server.on('error', (error) => {

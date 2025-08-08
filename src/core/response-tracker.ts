@@ -4,18 +4,18 @@
  */
 
 import { EventEmitter } from 'events';
-import { JanusResponse, PendingCommand } from '../types/protocol';
+import { JanusResponse, PendingRequest } from '../types/protocol';
 import { JSONRPCErrorBuilder, JSONRPCErrorCode, JSONRPCErrorClass } from '../types/jsonrpc-error';
 
 export interface ResponseTrackerEvents {
-  'timeout': (commandId: string) => void;
-  'response': (commandId: string, response: JanusResponse) => void;
-  'cleanup': (commandId: string) => void;
+  'timeout': (requestId: string) => void;
+  'response': (requestId: string, response: JanusResponse) => void;
+  'cleanup': (requestId: string) => void;
 }
 
 export interface TrackerConfig {
-  /** Maximum number of pending commands */
-  maxPendingCommands?: number;
+  /** Maximum number of pending requests */
+  maxPendingRequests?: number;
   
   /** Cleanup interval in milliseconds */
   cleanupInterval?: number;
@@ -25,7 +25,7 @@ export interface TrackerConfig {
 }
 
 export class ResponseTracker extends EventEmitter {
-  private pendingCommands = new Map<string, PendingCommand>();
+  private pendingRequests = new Map<string, PendingRequest>();
   private cleanupTimer: NodeJS.Timeout | null = null;
   private config: Required<TrackerConfig>;
 
@@ -33,7 +33,7 @@ export class ResponseTracker extends EventEmitter {
     super();
     
     this.config = {
-      maxPendingCommands: config.maxPendingCommands ?? 1000,
+      maxPendingRequests: config.maxPendingRequests ?? 1000,
       cleanupInterval: config.cleanupInterval ?? 30000, // 30 seconds
       defaultTimeout: config.defaultTimeout ?? 30.0
     };
@@ -42,45 +42,45 @@ export class ResponseTracker extends EventEmitter {
   }
 
   /**
-   * Track a command awaiting response
+   * Track a request awaiting response
    */
-  trackCommand(
-    commandId: string,
+  trackRequest(
+    requestId: string,
     resolve: (response: JanusResponse) => void,
     reject: (error: Error) => void,
     timeout: number = this.config.defaultTimeout
   ): void {
     // Check limits
-    if (this.pendingCommands.size >= this.config.maxPendingCommands) {
+    if (this.pendingRequests.size >= this.config.maxPendingRequests) {
       reject(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.RESOURCE_LIMIT_EXCEEDED,
-        `Too many pending commands: Maximum ${this.config.maxPendingCommands} commands allowed`
+        `Too many pending requests: Maximum ${this.config.maxPendingRequests} requests allowed`
       )));
       return;
     }
 
     // Check for duplicate tracking
-    if (this.pendingCommands.has(commandId)) {
+    if (this.pendingRequests.has(requestId)) {
       reject(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.INVALID_REQUEST,
-        `Command already being tracked: Command ${commandId} is already awaiting response`
+        `Request already being tracked: Request ${requestId} is already awaiting response`
       )));
       return;
     }
 
-    // Create pending command entry
-    const pending: PendingCommand = {
+    // Create pending request entry
+    const pending: PendingRequest = {
       resolve,
       reject,
       timestamp: Date.now(),
       timeout
     };
 
-    this.pendingCommands.set(commandId, pending);
+    this.pendingRequests.set(requestId, pending);
 
     // Set individual timeout
     setTimeout(() => {
-      this.handleTimeout(commandId);
+      this.handleTimeout(requestId);
     }, timeout * 1000);
   }
 
@@ -88,19 +88,19 @@ export class ResponseTracker extends EventEmitter {
    * Handle an incoming response
    */
   handleResponse(response: JanusResponse): boolean {
-    const pending = this.pendingCommands.get(response.commandId);
+    const pending = this.pendingRequests.get(response.request_id);
     
     if (!pending) {
-      // Response for unknown command (possibly timed out)
+      // Response for unknown request (possibly timed out)
       return false;
     }
 
     // Remove from tracking
-    this.pendingCommands.delete(response.commandId);
-    this.emit('cleanup', response.commandId);
+    this.pendingRequests.delete(response.request_id);
+    this.emit('cleanup', response.request_id);
 
     // Emit response event
-    this.emit('response', response.commandId, response);
+    this.emit('response', response.request_id, response);
 
     // Resolve or reject based on response
     if (response.success) {
@@ -108,7 +108,7 @@ export class ResponseTracker extends EventEmitter {
     } else {
       const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
-        response.error?.message ?? 'Command failed'
+        response.error?.message ?? 'Request failed'
       ));
       pending.reject(error);
     }
@@ -117,21 +117,21 @@ export class ResponseTracker extends EventEmitter {
   }
 
   /**
-   * Cancel tracking for a command
+   * Cancel tracking for a request
    */
-  cancelCommand(commandId: string, reason?: string): boolean {
-    const pending = this.pendingCommands.get(commandId);
+  cancelRequest(requestId: string, reason?: string): boolean {
+    const pending = this.pendingRequests.get(requestId);
     
     if (!pending) {
       return false;
     }
 
-    this.pendingCommands.delete(commandId);
-    this.emit('cleanup', commandId);
+    this.pendingRequests.delete(requestId);
+    this.emit('cleanup', requestId);
 
     const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
       JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
-      reason ?? `Command ${commandId} was cancelled`
+      reason ?? `Request ${requestId} was cancelled`
     ));
     pending.reject(error);
 
@@ -139,62 +139,62 @@ export class ResponseTracker extends EventEmitter {
   }
 
   /**
-   * Cancel all pending commands
+   * Cancel all pending requests
    */
-  cancelAllCommands(reason?: string): number {
-    const count = this.pendingCommands.size;
+  cancelAllRequests(reason?: string): number {
+    const count = this.pendingRequests.size;
     
-    for (const [commandId, pending] of this.pendingCommands) {
+    for (const [requestId, pending] of this.pendingRequests) {
       const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.RESPONSE_TRACKING_ERROR,
-        reason ?? 'All pending commands were cancelled'
+        reason ?? 'All pending requests were cancelled'
       ));
       pending.reject(error);
-      this.emit('cleanup', commandId);
+      this.emit('cleanup', requestId);
     }
     
-    this.pendingCommands.clear();
+    this.pendingRequests.clear();
     return count;
   }
 
   /**
-   * Get number of pending commands
+   * Get number of pending requests
    */
   getPendingCount(): number {
-    return this.pendingCommands.size;
+    return this.pendingRequests.size;
   }
 
   /**
-   * Get list of pending command IDs
+   * Get list of pending request IDs
    */
-  getPendingCommandIds(): string[] {
-    return Array.from(this.pendingCommands.keys());
+  getPendingRequestIds(): string[] {
+    return Array.from(this.pendingRequests.keys());
   }
 
   /**
-   * Check if a command is being tracked
+   * Check if a request is being tracked
    */
-  isTracking(commandId: string): boolean {
-    return this.pendingCommands.has(commandId);
+  isTracking(requestId: string): boolean {
+    return this.pendingRequests.has(requestId);
   }
 
   /**
-   * Get statistics about pending commands
+   * Get statistics about pending requests
    */
   getStatistics(): {
     pendingCount: number;
     averageAge: number;
-    oldestCommand?: { id: string; age: number } | undefined;
-    newestCommand?: { id: string; age: number } | undefined;
+    oldestRequest?: { id: string; age: number } | undefined;
+    newestRequest?: { id: string; age: number } | undefined;
   } {
     const now = Date.now();
-    const commands = Array.from(this.pendingCommands.entries());
+    const requests = Array.from(this.pendingRequests.entries());
     
-    if (commands.length === 0) {
+    if (requests.length === 0) {
       return { pendingCount: 0, averageAge: 0 };
     }
 
-    const ages = commands.map(([id, pending]) => ({
+    const ages = requests.map(([id, pending]) => ({
       id,
       age: (now - pending.timestamp) / 1000 // Convert to seconds
     }));
@@ -203,54 +203,54 @@ export class ResponseTracker extends EventEmitter {
     const averageAge = totalAge / ages.length;
 
     const sortedByAge = ages.sort((a, b) => b.age - a.age);
-    const oldestCommand = sortedByAge[0];
-    const newestCommand = sortedByAge[sortedByAge.length - 1];
+    const oldestRequest = sortedByAge[0];
+    const newestRequest = sortedByAge[sortedByAge.length - 1];
 
     return {
-      pendingCount: commands.length,
+      pendingCount: requests.length,
       averageAge,
-      oldestCommand,
-      newestCommand
+      oldestRequest,
+      newestRequest
     };
   }
 
   /**
-   * Track command with error callback support (matches Swift error-handled registration)
+   * Track request with error callback support (matches Swift error-handled registration)
    */
-  trackCommandWithErrorHandling(
-    commandId: string,
+  trackRequestWithErrorHandling(
+    requestId: string,
     resolve: (response: JanusResponse) => void,
     reject: (error: Error) => void,
     onError: (error: Error) => void,
     timeout: number = this.config.defaultTimeout
   ): void {
     // Check limits
-    if (this.pendingCommands.size >= this.config.maxPendingCommands) {
+    if (this.pendingRequests.size >= this.config.maxPendingRequests) {
       onError(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.RESOURCE_LIMIT_EXCEEDED,
-        `Too many pending commands: Maximum ${this.config.maxPendingCommands} commands allowed`
+        `Too many pending requests: Maximum ${this.config.maxPendingRequests} requests allowed`
       )));
       return;
     }
 
     // Check for duplicate tracking
-    if (this.pendingCommands.has(commandId)) {
+    if (this.pendingRequests.has(requestId)) {
       onError(new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.INVALID_REQUEST,
-        `Command already being tracked: Command ${commandId} is already awaiting response`
+        `Request already being tracked: Request ${requestId} is already awaiting response`
       )));
       return;
     }
 
     // If no errors, proceed with normal tracking
-    this.trackCommand(commandId, resolve, reject, timeout);
+    this.trackRequest(requestId, resolve, reject, timeout);
   }
 
   /**
    * Register bilateral timeout for request/response pairs (matches Go/Swift implementation)
    */
   trackBilateralTimeout(
-    baseCommandId: string,
+    baseRequestId: string,
     requestResolve: (response: JanusResponse) => void,
     requestReject: (error: Error) => void,
     responseResolve: (response: JanusResponse) => void,
@@ -258,30 +258,30 @@ export class ResponseTracker extends EventEmitter {
     requestTimeout: number = this.config.defaultTimeout,
     responseTimeout: number = this.config.defaultTimeout
   ): void {
-    const requestId = `${baseCommandId}-request`;
-    const responseId = `${baseCommandId}-response`;
+    const requestId = `${baseRequestId}-request`;
+    const responseId = `${baseRequestId}-response`;
 
     // Track request timeout
-    this.trackCommand(requestId, requestResolve, requestReject, requestTimeout);
+    this.trackRequest(requestId, requestResolve, requestReject, requestTimeout);
     
     // Track response timeout
-    this.trackCommand(responseId, responseResolve, responseReject, responseTimeout);
+    this.trackRequest(responseId, responseResolve, responseReject, responseTimeout);
   }
 
   /**
    * Cancel bilateral timeout (matches Swift implementation)
    */
-  cancelBilateralTimeout(baseCommandId: string): number {
-    const requestId = `${baseCommandId}-request`;
-    const responseId = `${baseCommandId}-response`;
+  cancelBilateralTimeout(baseRequestId: string): number {
+    const requestId = `${baseRequestId}-request`;
+    const responseId = `${baseRequestId}-response`;
     
     let cancelledCount = 0;
     
-    if (this.cancelCommand(requestId)) {
+    if (this.cancelRequest(requestId)) {
       cancelledCount++;
     }
     
-    if (this.cancelCommand(responseId)) {
+    if (this.cancelRequest(responseId)) {
       cancelledCount++;
     }
     
@@ -289,10 +289,10 @@ export class ResponseTracker extends EventEmitter {
   }
 
   /**
-   * Extend timeout for existing command (matches Swift extendTimeout implementation)
+   * Extend timeout for existing request (matches Swift extendTimeout implementation)
    */
-  extendTimeout(commandId: string, additionalTime: number): boolean {
-    const pending = this.pendingCommands.get(commandId);
+  extendTimeout(requestId: string, additionalTime: number): boolean {
+    const pending = this.pendingRequests.get(requestId);
     
     if (!pending) {
       return false;
@@ -304,24 +304,24 @@ export class ResponseTracker extends EventEmitter {
     // We need to restart the timeout with the additional time
     // Create a new timeout that will trigger after the additional time
     setTimeout(() => {
-      this.handleTimeout(commandId);
+      this.handleTimeout(requestId);
     }, additionalTime * 1000);
     
     return true;
   }
 
   /**
-   * Cleanup expired commands
+   * Cleanup expired requests
    */
   cleanup(): number {
     const now = Date.now();
     let cleanedCount = 0;
 
-    for (const [commandId, pending] of this.pendingCommands) {
+    for (const [requestId, pending] of this.pendingRequests) {
       const age = (now - pending.timestamp) / 1000; // Convert to seconds
       
       if (age >= pending.timeout) {
-        this.handleTimeout(commandId);
+        this.handleTimeout(requestId);
         cleanedCount++;
       }
     }
@@ -338,26 +338,26 @@ export class ResponseTracker extends EventEmitter {
       this.cleanupTimer = null;
     }
 
-    this.cancelAllCommands('Tracker shutdown');
+    this.cancelAllRequests('Tracker shutdown');
   }
 
   /**
-   * Handle command timeout
+   * Handle request timeout
    */
-  private handleTimeout(commandId: string): void {
-    const pending = this.pendingCommands.get(commandId);
+  private handleTimeout(requestId: string): void {
+    const pending = this.pendingRequests.get(requestId);
     
     if (!pending) {
       return; // Already handled
     }
 
-    this.pendingCommands.delete(commandId);
-    this.emit('timeout', commandId);
-    this.emit('cleanup', commandId);
+    this.pendingRequests.delete(requestId);
+    this.emit('timeout', requestId);
+    this.emit('cleanup', requestId);
 
     const error = new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
       JSONRPCErrorCode.HANDLER_TIMEOUT,
-      `Command ${commandId} timed out after ${pending.timeout} seconds`
+      `Request ${requestId} timed out after ${pending.timeout} seconds`
     ));
     pending.reject(error);
   }

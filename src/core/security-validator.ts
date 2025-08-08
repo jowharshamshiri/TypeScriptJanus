@@ -14,7 +14,7 @@ export interface ValidationResult {
 
 export interface ResourceLimits {
   maxActiveConnections: number;
-  maxCommandHandlers: number;
+  maxRequestHandlers: number;
   maxPendingRequests: number;
   maxMemoryUsage: number;
 }
@@ -105,9 +105,19 @@ export class SecurityValidator {
   }
 
   /**
-   * Validate channel or command name
+   * Validate request name
    */
-  validateName(name: string, type: 'channel' | 'command'): ValidationResult {
+  validateName(name: string, type: 'request'): ValidationResult {
+    // Null/undefined check
+    if (!name || typeof name !== 'string') {
+      return {
+        valid: false,
+        error: `${type} name must be a string`,
+        code: 'INVALID_NAME_TYPE',
+        details: `${type} name must be provided as a string`
+      };
+    }
+    
     // Empty name check
     if (name.length === 0) {
       return {
@@ -128,7 +138,7 @@ export class SecurityValidator {
       };
     }
 
-    // Null byte detection (check first as it's more specific)
+    // Null byte detection (check first as it's more manifestific)
     if (name.includes('\x00')) {
       return {
         valid: false,
@@ -236,7 +246,7 @@ export class SecurityValidator {
   }
 
   /**
-   * Validate command arguments size
+   * Validate request arguments size
    */
   validateArgsSize(args: Record<string, any>): ValidationResult {
     const argsStr = JSON.stringify(args);
@@ -245,7 +255,7 @@ export class SecurityValidator {
     if (argsSize > this.config.maxArgsSize) {
       return {
         valid: false,
-        error: 'Command arguments exceed maximum size',
+        error: 'Request arguments exceed maximum size',
         code: 'ARGS_TOO_LARGE',
         details: `Arguments must be ${this.config.maxArgsSize} bytes or less`
       };
@@ -345,23 +355,23 @@ export class SecurityValidator {
   }
 
   /**
-   * Comprehensive validation of a socket command
+   * Comprehensive validation of a socket request
    */
-  validateCommand(command: any): ValidationResult {
+  validateRequest(request: any): ValidationResult {
     // Type validation
-    if (typeof command !== 'object' || command === null) {
+    if (typeof request !== 'object' || request === null) {
       return {
         valid: false,
-        error: 'Command must be an object',
-        code: 'INVALID_COMMAND_TYPE',
-        details: 'Command must be a non-null object'
+        error: 'Request must be an object',
+        code: 'INVALID_REQUEST_TYPE',
+        details: 'Request must be a non-null object'
       };
     }
 
-    // Required fields validation
-    const requiredFields = ['id', 'channelId', 'command', 'timestamp'];
+    // Required fields validation per PRIME DIRECTIVE
+    const requiredFields = ['id', 'method', 'request', 'timestamp'];
     for (const field of requiredFields) {
-      if (!(field in command) || typeof command[field] !== 'string') {
+      if (!(field in request) || typeof request[field] !== 'string') {
         return {
           valid: false,
           error: `Missing or invalid required field: ${field}`,
@@ -373,18 +383,18 @@ export class SecurityValidator {
 
     // Validate individual fields
     const validations = [
-      () => this.validateUUID(command.id),
-      () => this.validateName(command.channelId, 'channel'),
-      () => this.validateName(command.command, 'command'),
-      () => this.validateTimestamp(command.timestamp)
+      () => this.validateUUID(request.id),
+      () => this.validateName(request.method, 'request'),
+      () => this.validateName(request.request, 'request'),
+      () => this.validateTimestamp(request.timestamp)
     ];
 
-    if (command.timeout !== undefined) {
-      validations.push(() => this.validateTimeout(command.timeout));
+    if (request.timeout !== undefined) {
+      validations.push(() => this.validateTimeout(request.timeout));
     }
 
-    if (command.args !== undefined) {
-      validations.push(() => this.validateArgsSize(command.args));
+    if (request.args !== undefined) {
+      validations.push(() => this.validateArgsSize(request.args));
     }
 
     for (const validate of validations) {
@@ -395,7 +405,7 @@ export class SecurityValidator {
     }
 
     // Overall message content validation
-    return this.validateMessageContent(command);
+    return this.validateMessageContent(request);
   }
 
   /**
@@ -412,8 +422,8 @@ export class SecurityValidator {
       };
     }
 
-    // Required fields validation
-    const requiredFields = ['commandId', 'channelId', 'success', 'timestamp'];
+    // Required fields validation per PRIME DIRECTIVE
+    const requiredFields = ['request_id', 'id', 'success', 'timestamp'];
     for (const field of requiredFields) {
       if (!(field in response)) {
         return {
@@ -426,20 +436,20 @@ export class SecurityValidator {
     }
 
     // Type-specific field validation
-    if (typeof response.commandId !== 'string' || typeof response.channelId !== 'string' || 
+    if (typeof response.request_id !== 'string' || typeof response.id !== 'string' ||
         typeof response.success !== 'boolean' || typeof response.timestamp !== 'string') {
       return {
         valid: false,
         error: 'Invalid field types in response',
         code: 'INVALID_FIELD_TYPES',
-        details: 'commandId, channelId must be strings, success must be boolean, timestamp must be string'
+        details: 'request_id and id must be strings, success must be boolean, timestamp must be string'
       };
     }
 
     // Validate individual fields
     const validations = [
-      () => this.validateUUID(response.commandId),
-      () => this.validateName(response.channelId, 'channel'),
+      () => this.validateUUID(response.request_id),
+      () => this.validateUUID(response.id),
       () => this.validateTimestamp(response.timestamp)
     ];
 
@@ -478,12 +488,12 @@ export class SecurityValidator {
    */
   validateResourceUsage(
     activeConnections: number,
-    commandHandlers: number,
+    requestHandlers: number,
     pendingRequests: number,
     memoryUsage: number,
     limits: ResourceLimits = {
       maxActiveConnections: 100,
-      maxCommandHandlers: 50,
+      maxRequestHandlers: 50,
       maxPendingRequests: 200,
       maxMemoryUsage: 100 * 1024 * 1024 // 100MB
     }
@@ -497,12 +507,12 @@ export class SecurityValidator {
       };
     }
 
-    if (commandHandlers > limits.maxCommandHandlers) {
+    if (requestHandlers > limits.maxRequestHandlers) {
       return {
         valid: false,
-        error: 'Command handlers exceed limit',
+        error: 'Request handlers exceed limit',
         code: 'HANDLER_LIMIT_EXCEEDED',
-        details: `Command handlers (${commandHandlers}) exceed limit (${limits.maxCommandHandlers})`
+        details: `Request handlers (${requestHandlers}) exceed limit (${limits.maxRequestHandlers})`
       };
     }
 
@@ -580,17 +590,17 @@ export class SecurityValidator {
   }
 
   /**
-   * Validate dangerous command patterns (matches Swift implementation)
+   * Validate dangerous request patterns (matches Swift implementation)
    */
-  static validateDangerousCommand(commandName: string): ValidationResult {
+  static validateDangerousRequest(requestName: string): ValidationResult {
     const dangerousPatterns = ['eval', 'exec', 'system', 'shell', 'rm', 'delete', 'drop'];
-    const lowerCommand = commandName.toLowerCase();
+    const lowerRequest = requestName.toLowerCase();
 
     for (const pattern of dangerousPatterns) {
-      if (lowerCommand.includes(pattern)) {
+      if (lowerRequest.includes(pattern)) {
         return {
           valid: false,
-          error: `Command name contains dangerous pattern: ${pattern}`
+          error: `Request name contains dangerous pattern: ${pattern}`
         };
       }
     }

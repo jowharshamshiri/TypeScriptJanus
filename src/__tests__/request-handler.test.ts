@@ -1,5 +1,5 @@
 /**
- * Comprehensive CommandHandler Tests for TypeScript Janus Implementation
+ * Comprehensive RequestHandler Tests for TypeScript Janus Implementation
  * Tests all direct value response handlers and async patterns
  */
 
@@ -17,19 +17,19 @@ import {
   asyncArrayHandler,
   asyncObjectHandler,
   asyncCustomHandler,
-} from '../server/command-handler';
-import { JanusCommand } from '../types/protocol';
+} from '../server/request-handler';
+import { JanusRequest } from '../types/protocol';
 import { JSONRPCErrorCode, JSONRPCErrorBuilder } from '../types/jsonrpc-error';
 
-describe('CommandHandler System', () => {
+describe('RequestHandler System', () => {
   
-  // Helper to create test command
-  const createTestCommand = (args: Record<string, any> = {}): JanusCommand => ({
+  // Helper to create test request
+  const createTestRequest = (args: Record<string, any> = {}): JanusRequest => ({
     id: 'test-id',
-    channelId: 'test-channel',
-    command: 'test-command',
+    method: 'test-request',
+    request: 'test-request',
     args,
-    timestamp: Date.now(),
+    timestamp: new Date().toISOString(),
     reply_to: '/tmp/test-reply.sock'
   });
 
@@ -37,9 +37,9 @@ describe('CommandHandler System', () => {
     
     test('boolHandler - returns boolean directly', async () => {
       const handler = boolHandler((_cmd) => true);
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -49,9 +49,9 @@ describe('CommandHandler System', () => {
 
     test('stringHandler - returns string directly', async () => {
       const handler = stringHandler((_cmd) => 'test response');
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -61,9 +61,9 @@ describe('CommandHandler System', () => {
 
     test('numberHandler - returns number directly', async () => {
       const handler = numberHandler((_cmd) => 42);
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -74,9 +74,9 @@ describe('CommandHandler System', () => {
     test('arrayHandler - returns array directly', async () => {
       const testArray = ['item1', 'item2', 123];
       const handler = arrayHandler((_cmd) => testArray);
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -87,9 +87,9 @@ describe('CommandHandler System', () => {
     test('objectHandler - returns object directly', async () => {
       const testObject = { key1: 'value1', key2: 42, key3: true };
       const handler = objectHandler((_cmd) => testObject);
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -105,9 +105,9 @@ describe('CommandHandler System', () => {
       
       const testUser: User = { id: 123, name: 'Test User' };
       const handler = customHandler<User>((_cmd) => testUser);
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -123,10 +123,10 @@ describe('CommandHandler System', () => {
         await new Promise(resolve => setTimeout(resolve, 10)); // Simulate async work
         return true;
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
       const start = Date.now();
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       const duration = Date.now() - start;
       
       expect(duration).toBeGreaterThanOrEqual(10); // Verify async execution
@@ -141,10 +141,10 @@ describe('CommandHandler System', () => {
         await new Promise(resolve => setTimeout(resolve, 10)); // Simulate async work
         return 'async response';
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
       const start = Date.now();
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       const duration = Date.now() - start;
       
       expect(duration).toBeGreaterThanOrEqual(10); // Verify async execution
@@ -159,9 +159,9 @@ describe('CommandHandler System', () => {
         await new Promise(resolve => setTimeout(resolve, 5));
         return 3.14;
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -175,9 +175,9 @@ describe('CommandHandler System', () => {
         await new Promise(resolve => setTimeout(resolve, 5));
         return testArray;
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -191,9 +191,9 @@ describe('CommandHandler System', () => {
         await new Promise(resolve => setTimeout(resolve, 5));
         return testObject;
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -218,9 +218,9 @@ describe('CommandHandler System', () => {
         await new Promise(resolve => setTimeout(resolve, 5));
         return testResponse;
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
@@ -235,9 +235,9 @@ describe('CommandHandler System', () => {
       const handler = stringHandler((_cmd) => {
         throw new Error('sync handler error');
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -250,9 +250,9 @@ describe('CommandHandler System', () => {
       const handler = asyncStringHandler(async (_cmd) => {
         throw new Error('async handler error');
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -269,9 +269,9 @@ describe('CommandHandler System', () => {
           { field: 'missing_arg' }
         );
       });
-      const command = createTestCommand();
+      const request = createTestRequest();
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -287,7 +287,7 @@ describe('CommandHandler System', () => {
 
   describe('Handler Arguments Access', () => {
     
-    test('handler can access command arguments', async () => {
+    test('handler can access request arguments', async () => {
       const handler = objectHandler((cmd) => {
         const name = cmd.args?.name as string;
         const age = cmd.args?.age as number;
@@ -299,23 +299,23 @@ describe('CommandHandler System', () => {
         return {
           processed_name: `Hello, ${name}`,
           processed_age: age + 1,
-          original_command: cmd.command
+          original_request: cmd.request
         };
       });
 
-      const command = createTestCommand({
+      const request = createTestRequest({
         name: 'John',
         age: 25
       });
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(true);
       if (result.success) {
         const response = result.value;
         expect(response.processed_name).toBe('Hello, John');
         expect(response.processed_age).toBe(26);
-        expect(response.original_command).toBe('test-command');
+        expect(response.original_request).toBe('test-request');
       }
     });
 
@@ -334,12 +334,12 @@ describe('CommandHandler System', () => {
         return { name, age };
       });
 
-      const command = createTestCommand({
+      const request = createTestRequest({
         name: 'John'
         // missing age
       });
       
-      const result = await handler.handle(command);
+      const result = await handler.handle(request);
       
       expect(result.success).toBe(false);
       if (!result.success) {

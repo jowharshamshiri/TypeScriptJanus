@@ -1,49 +1,49 @@
 /**
  * TypeScript type definitions for Janus Protocol
- * Based on the comprehensive protocol specification
+ * Based on the comprehensive protocol manifest
  */
 
-export interface JanusCommand {
+export interface JanusRequest {
   /** UUID v4 string for response correlation */
   id: string;
   
-  /** Channel routing identifier (1-256 chars, alphanumeric + '-_') */
-  channelId: string;
+  /** Method name being invoked (PRIME DIRECTIVE) */
+  method: string;
   
-  /** Command name (1-256 chars, alphanumeric + '-_') */
-  command: string;
+  /** Request name (1-256 chars, alphanumeric + '-_') */
+  request: string;
   
   /** Socket path for response (SOCK_DGRAM connectionless communication) */
   reply_to?: string;
   
-  /** Command arguments object (max 5MB) */
+  /** Request arguments object (max 5MB) */
   args?: Record<string, any>;
   
   /** Timeout in seconds (0.1-300.0, default: 30.0) */
   timeout?: number;
   
-  /** Unix timestamp as number (matching Go/Rust/Swift) */
-  timestamp: number;
+  /** RFC 3339 timestamp with milliseconds (PRIME DIRECTIVE) */
+  timestamp: string;
 }
 
 export interface JanusResponse {
-  /** UUID from original command for correlation */
-  commandId: string;
+  /** Unwrapped response data (PRIME DIRECTIVE) */
+  result?: any;
   
-  /** Channel verification */
-  channelId: string;
+  /** Error information (JSON-RPC 2.0 compliant) - null if success */
+  error?: import('./jsonrpc-error').JSONRPCError;
   
   /** Boolean success/failure indicator */
   success: boolean;
   
-  /** Response data object (if success=true) */
-  result?: Record<string, any>;
+  /** Request ID that this response correlates to */
+  request_id: string;
   
-  /** Error information (if success=false) - JSON-RPC 2.0 compliant */
-  error?: import('./jsonrpc-error').JSONRPCError;
+  /** Unique identifier for this response */
+  id: string;
   
-  /** Response generation timestamp as Unix timestamp */
-  timestamp: number;
+  /** Response generation timestamp (RFC 3339 format) */
+  timestamp: string;
 }
 
 // Legacy SocketError interface removed - replaced by JSONRPCError in jsonrpc-error.ts
@@ -54,26 +54,19 @@ export interface JanusResponse {
  */
 export class RequestHandle {
   private readonly internalID: string;
-  private readonly command: string;
-  private readonly channel: string;
+  private readonly request: string;
   private readonly timestamp: Date;
   private cancelled: boolean = false;
 
-  constructor(internalID: string, command: string, channel: string) {
+  constructor(internalID: string, request: string) {
     this.internalID = internalID;
-    this.command = command;
-    this.channel = channel;
+    this.request = request;
     this.timestamp = new Date();
   }
 
-  /** Get the command name for this request */
-  getCommand(): string {
-    return this.command;
-  }
-
-  /** Get the channel ID for this request */
-  getChannel(): string {
-    return this.channel;
+  /** Get the request name for this request */
+  getRequest(): string {
+    return this.request;
   }
 
   /** Get when this request was created */
@@ -108,20 +101,20 @@ export enum RequestStatus {
 
 export interface SocketMessage {
   /** Message type discriminator */
-  type: 'command' | 'response';
+  type: 'request' | 'response';
   
   /** Base64-encoded JSON payload */
   payload: string;
 }
 
-export interface PendingCommand {
+export interface PendingRequest {
   /** Promise resolve function */
   resolve: (response: JanusResponse) => void;
   
   /** Promise reject function */
   reject: (error: Error) => void;
   
-  /** Command creation timestamp */
+  /** Request creation timestamp */
   timestamp: number;
   
   /** Timeout duration in seconds */
@@ -132,7 +125,7 @@ export interface ConnectionConfig {
   /** Unix socket path */
   socketPath: string;
   
-  /** Default timeout for commands */
+  /** Default timeout for requests */
   defaultTimeout?: number;
   
   /** Maximum message size in bytes */
@@ -141,12 +134,12 @@ export interface ConnectionConfig {
   /** Connection timeout in milliseconds */
   connectionTimeout?: number;
   
-  /** Maximum pending commands */
-  maxPendingCommands?: number;
+  /** Maximum pending requests */
+  maxPendingRequests?: number;
 }
 
 export interface SecurityConfig {
-  /** Maximum channel/command name length */
+  /** Maximum channel/request name length */
   maxNameLength?: number;
   
   /** Maximum argument data size */
@@ -175,29 +168,20 @@ export interface Manifest {
   /** Detailed description of the API */
   description?: string;
   
-  /** Map of channel IDs to channel definitions */
-  channels: Record<string, Channel>;
+  /** Available requests */
+  requests?: Record<string, Request>;
   
   /** Reusable model definitions */
   models?: Record<string, Model>;
 }
 
-export interface Channel {
-  /** Human-readable channel name */
-  name?: string;
-  
-  /** Detailed description of the channel */
-  description?: string;
-  
-  /** Map of command names to command definitions */
-  commands: Record<string, Command>;
-}
+// Channel interface removed - channels no longer part of protocol
 
-export interface Command {
-  /** Human-readable command name */
+export interface Request {
+  /** Human-readable request name */
   name?: string;
   
-  /** Detailed description of the command */
+  /** Detailed description of the request */
   description: string;
   
   /** Map of argument names to argument definitions */
@@ -297,10 +281,8 @@ export interface Model {
   items?: Argument;
 }
 
-export type CommandHandler = (args: Record<string, any>) => Promise<Record<string, any>>;
+export type RequestHandler = (args: Record<string, any>) => Promise<Record<string, any>>;
 
-export interface CommandHandlerRegistry {
-  [channelId: string]: {
-    [commandName: string]: CommandHandler;
-  };
+export interface RequestHandlerRegistry {
+  [requestName: string]: RequestHandler;
 }

@@ -8,12 +8,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
-import { JanusCommand, JanusResponse, ConnectionConfig } from '../types/protocol';
+import { JanusRequest, JanusResponse, ConnectionConfig } from '../types/protocol';
 import { SecurityValidator } from './security-validator';
 
 export interface JanusClientEvents {
   'error': (error: Error) => void;
-  'message': (message: JanusCommand | JanusResponse) => void;
+  'message': (message: JanusRequest | JanusResponse) => void;
   'response': (response: JanusResponse) => void;
 }
 
@@ -36,7 +36,7 @@ export class JanusClient extends EventEmitter {
       defaultTimeout: config.defaultTimeout ?? 30.0,
       maxMessageSize: config.maxMessageSize ?? 64 * 1024, // 64KB for datagram limit
       connectionTimeout: config.connectionTimeout ?? 10000,
-      maxPendingCommands: config.maxPendingCommands ?? 1000
+      maxPendingRequests: config.maxPendingRequests ?? 1000
     };
     
     this.validator = new SecurityValidator({
@@ -64,9 +64,9 @@ export class JanusClient extends EventEmitter {
   }
 
   /**
-   * Send command datagram and wait for response
+   * Send request datagram and wait for response
    */
-  async sendCommand(command: Omit<JanusCommand, 'reply_to'>): Promise<JanusResponse> {
+  async sendRequest(request: Omit<JanusRequest, 'reply_to'>): Promise<JanusResponse> {
     return new Promise(async (resolve, reject) => {
       const responseSocketPath = this.generateResponseSocketPath();
       let responseSocket: any = null;
@@ -105,7 +105,7 @@ export class JanusClient extends EventEmitter {
             // Check if response indicates an error
             if (!response.success && response.error) {
               const error = new JanusClientError(
-                response.error.message || 'Command failed',
+                response.error.message || 'Request failed',
                 'SERVER_ERROR',
                 response.error.data?.details
               );
@@ -135,37 +135,37 @@ export class JanusClient extends EventEmitter {
         });
 
         // Set timeout
-        const timeout = command.timeout || this.config.defaultTimeout;
+        const timeout = request.timeout || this.config.defaultTimeout;
         timeoutHandle = setTimeout(() => {
           cleanup();
           reject(new JanusClientError(
-            'Command timeout',
+            'Request timeout',
             'TIMEOUT',
-            `Command ${command.id} timed out after ${timeout}s`
+            `Request ${request.id} timed out after ${timeout}s`
           ));
         }, timeout * 1000);
 
-        // Prepare command with reply_to field
-        const commandWithReplyTo: JanusCommand = {
-          ...command,
+        // Prepare request with reply_to field
+        const requestWithReplyTo: JanusRequest = {
+          ...request,
           reply_to: responseSocketPath
         };
 
-        // Validate command
-        const commandData = Buffer.from(JSON.stringify(commandWithReplyTo));
-        if (commandData.length > this.config.maxMessageSize) {
+        // Validate request
+        const requestData = Buffer.from(JSON.stringify(requestWithReplyTo));
+        if (requestData.length > this.config.maxMessageSize) {
           cleanup();
           reject(new JanusClientError(
             'Message too large',
             'MESSAGE_TOO_LARGE',
-            `Message size ${commandData.length} exceeds limit ${this.config.maxMessageSize}`
+            `Message size ${requestData.length} exceeds limit ${this.config.maxMessageSize}`
           ));
           return;
         }
 
-        // Send command datagram to Unix domain socket
+        // Send request datagram to Unix domain socket
         const clientSocket = unixDgram.createSocket('unix_dgram');
-        clientSocket.send(commandData, 0, commandData.length, this.config.socketPath, (err: Error | null) => {
+        clientSocket.send(requestData, 0, requestData.length, this.config.socketPath, (err: Error | null) => {
           clientSocket.close();
           if (err) {
             cleanup();
@@ -178,7 +178,7 @@ export class JanusClient extends EventEmitter {
               ));
             } else {
               reject(new JanusClientError(
-                'Failed to send command',
+                'Failed to send request',
                 'SEND_ERROR',
                 err.message
               ));
@@ -198,25 +198,25 @@ export class JanusClient extends EventEmitter {
   }
 
   /**
-   * Send command without expecting response (fire-and-forget)
+   * Send request without expecting response (fire-and-forget)
    */
-  async sendCommandNoResponse(command: Omit<JanusCommand, 'reply_to'>): Promise<void> {
+  async sendRequestNoResponse(request: Omit<JanusRequest, 'reply_to'>): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        // Validate command
-        const commandData = Buffer.from(JSON.stringify(command));
-        if (commandData.length > this.config.maxMessageSize) {
+        // Validate request
+        const requestData = Buffer.from(JSON.stringify(request));
+        if (requestData.length > this.config.maxMessageSize) {
           reject(new JanusClientError(
             'Message too large',
             'MESSAGE_TOO_LARGE',
-            `Message size ${commandData.length} exceeds limit ${this.config.maxMessageSize}`
+            `Message size ${requestData.length} exceeds limit ${this.config.maxMessageSize}`
           ));
           return;
         }
 
-        // Send command datagram to Unix domain socket
+        // Send request datagram to Unix domain socket
         const clientSocket = unixDgram.createSocket('unix_dgram');
-        clientSocket.send(commandData, 0, commandData.length, this.config.socketPath, (err: Error | null) => {
+        clientSocket.send(requestData, 0, requestData.length, this.config.socketPath, (err: Error | null) => {
           clientSocket.close();
           if (err) {
             // Dynamic error detection for message too large (matching Go/Rust/Swift pattern)
@@ -228,7 +228,7 @@ export class JanusClient extends EventEmitter {
               ));
             } else {
               reject(new JanusClientError(
-                'Failed to send command',
+                'Failed to send request',
                 'SEND_ERROR',
                 err.message
               ));
@@ -240,7 +240,7 @@ export class JanusClient extends EventEmitter {
 
       } catch (err) {
         reject(new JanusClientError(
-          'Failed to send command',
+          'Failed to send request',
           'SEND_ERROR',
           err instanceof Error ? err.message : String(err)
         ));

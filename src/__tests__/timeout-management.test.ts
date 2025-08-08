@@ -1,6 +1,6 @@
 /**
  * Timeout Management Tests
- * Tests for ResponseTracker timeout functionality and command timeout handling
+ * Tests for ResponseTracker timeout functionality and request timeout handling
  */
 
 import { ResponseTracker } from '../core/response-tracker';
@@ -13,7 +13,7 @@ describe('Timeout Management', () => {
   beforeEach(() => {
     tracker = new ResponseTracker({
       defaultTimeout: 1.0, // 1 second for fast tests
-      maxPendingCommands: 100,
+      maxPendingRequests: 100,
       cleanupInterval: 5000
     });
   });
@@ -25,16 +25,16 @@ describe('Timeout Management', () => {
 
   describe('Timeout Registration', () => {
     it('should register timeout with callback', (done) => {
-      const commandId = 'test-command-1';
+      const requestId = 'test-request-1';
       
       let timeoutCalled = false;
       tracker.on('timeout', (id) => {
-        expect(id).toBe(commandId);
+        expect(id).toBe(requestId);
         timeoutCalled = true;
       });
 
-      tracker.trackCommand(
-        commandId,
+      tracker.trackRequest(
+        requestId,
         () => {
           done(new Error('Should not resolve - should timeout'));
         },
@@ -48,19 +48,19 @@ describe('Timeout Management', () => {
     }, 1000);
 
     it('should register multiple timeouts', (done) => {
-      const commands = ['cmd-1', 'cmd-2', 'cmd-3'];
+      const requests = ['cmd-1', 'cmd-2', 'cmd-3'];
       let timeoutCount = 0;
 
       tracker.on('timeout', () => {
         timeoutCount++;
-        if (timeoutCount === commands.length) {
+        if (timeoutCount === requests.length) {
           expect(timeoutCount).toBe(3);
           done();
         }
       });
 
-      commands.forEach((cmdId, index) => {
-        tracker.trackCommand(
+      requests.forEach((cmdId, index) => {
+        tracker.trackRequest(
           cmdId,
           () => {},
           () => {}, // Ignore rejection for this test
@@ -71,18 +71,18 @@ describe('Timeout Management', () => {
   });
 
   describe('Timeout Cancellation', () => {
-    it('should cancel specific timeouts when response received', (done) => {
-      const commandId = 'test-command-cancel';
+    it('should cancel manifestific timeouts when response received', (done) => {
+      const requestId = 'test-request-cancel';
       
       let timeoutCalled = false;
       tracker.on('timeout', () => {
         timeoutCalled = true;
       });
 
-      tracker.trackCommand(
-        commandId,
+      tracker.trackRequest(
+        requestId,
         (response) => {
-          expect(response.commandId).toBe(commandId);
+          expect(response.requestId).toBe(requestId);
           
           // Give timeout a chance to fire (it shouldn't)
           setTimeout(() => {
@@ -99,21 +99,21 @@ describe('Timeout Management', () => {
       // Send response before timeout
       setTimeout(() => {
         const response: JanusResponse = {
-          commandId,
-          channelId: 'test-channel',
+          requestId,
+          method: 'slow_request',
           success: true,
           result: { result: 'test' },
-          timestamp: Date.now()
+          timestamp: new Date().toISOString()
         };
         tracker.handleResponse(response);
       }, 100);
     }, 1000);
 
     it('should cancel all timeouts on cleanup', () => {
-      const commands = ['cleanup-1', 'cleanup-2', 'cleanup-3'];
+      const requests = ['cleanup-1', 'cleanup-2', 'cleanup-3'];
       
-      commands.forEach(cmdId => {
-        tracker.trackCommand(
+      requests.forEach(cmdId => {
+        tracker.trackRequest(
           cmdId,
           () => {},
           () => {},
@@ -123,7 +123,7 @@ describe('Timeout Management', () => {
 
       expect(tracker.getPendingCount()).toBe(3);
       
-      tracker.cancelAllCommands();
+      tracker.cancelAllRequests();
       expect(tracker.getPendingCount()).toBe(0);
     });
   });
@@ -132,28 +132,28 @@ describe('Timeout Management', () => {
     it('should count active timeouts correctly', () => {
       expect(tracker.getPendingCount()).toBe(0);
 
-      tracker.trackCommand('cmd-1', () => {}, () => {}, 5.0);
+      tracker.trackRequest('cmd-1', () => {}, () => {}, 5.0);
       expect(tracker.getPendingCount()).toBe(1);
 
-      tracker.trackCommand('cmd-2', () => {}, () => {}, 5.0);
+      tracker.trackRequest('cmd-2', () => {}, () => {}, 5.0);
       expect(tracker.getPendingCount()).toBe(2);
 
-      tracker.trackCommand('cmd-3', () => {}, () => {}, 5.0);
+      tracker.trackRequest('cmd-3', () => {}, () => {}, 5.0);
       expect(tracker.getPendingCount()).toBe(3);
     });
 
     it('should check active timeouts status', () => {
       expect(tracker.getPendingCount() > 0).toBe(false);
 
-      tracker.trackCommand('active-test', () => {}, () => {}, 5.0);
+      tracker.trackRequest('active-test', () => {}, () => {}, 5.0);
       expect(tracker.getPendingCount() > 0).toBe(true);
 
       const response: JanusResponse = {
-        commandId: 'active-test',
-        channelId: 'test-channel',
+        requestId: 'active-test',
+        method: 'slow_request',
         success: true,
         result: {},
-        timestamp: Date.now()
+        timestamp: new Date().toISOString()
       };
       tracker.handleResponse(response);
       
@@ -162,17 +162,17 @@ describe('Timeout Management', () => {
   });
 
   describe('Resource Cleanup', () => {
-    it('should clean up completed commands', (done) => {
-      const commandId = 'cleanup-test';
+    it('should clean up completed requests', (done) => {
+      const requestId = 'cleanup-test';
       
       tracker.on('cleanup', (id) => {
-        expect(id).toBe(commandId);
+        expect(id).toBe(requestId);
         expect(tracker.getPendingCount()).toBe(0);
         done();
       });
 
-      tracker.trackCommand(
-        commandId,
+      tracker.trackRequest(
+        requestId,
         () => {},
         () => {},
         5.0
@@ -180,26 +180,26 @@ describe('Timeout Management', () => {
 
       // Simulate response
       const response: JanusResponse = {
-        commandId,
-        channelId: 'test-channel',
+        requestId,
+        method: 'slow_request',
         success: true,
         result: {},
-        timestamp: Date.now()
+        timestamp: new Date().toISOString()
       };
       tracker.handleResponse(response);
     }, 1000);
 
-    it('should clean up timed out commands', (done) => {
-      const commandId = 'timeout-cleanup';
+    it('should clean up timed out requests', (done) => {
+      const requestId = 'timeout-cleanup';
       
       let cleanupCalled = false;
       tracker.on('cleanup', (id) => {
-        expect(id).toBe(commandId);
+        expect(id).toBe(requestId);
         cleanupCalled = true;
       });
 
-      tracker.trackCommand(
-        commandId,
+      tracker.trackRequest(
+        requestId,
         () => {},
         (error) => {
           expect(error.message).toContain('Handler timeout');
@@ -217,56 +217,56 @@ describe('Timeout Management', () => {
 
   describe('Thread-Safe Operations', () => {
     it('should handle concurrent timeout operations', (done) => {
-      const commandCount = 10;
+      const requestCount = 10;
       let completedCount = 0;
       let errors: Error[] = [];
 
-      for (let i = 0; i < commandCount; i++) {
-        const commandId = `concurrent-${i}`;
+      for (let i = 0; i < requestCount; i++) {
+        const requestId = `concurrent-${i}`;
         
-        tracker.trackCommand(
-          commandId,
+        tracker.trackRequest(
+          requestId,
           () => {
             completedCount++;
-            if (completedCount + errors.length === commandCount) {
+            if (completedCount + errors.length === requestCount) {
               expect(errors.length).toBe(0);
               done();
             }
           },
           (error) => {
             errors.push(error);
-            if (completedCount + errors.length === commandCount) {
+            if (completedCount + errors.length === requestCount) {
               done(new Error(`Concurrent operations failed: ${errors.map(e => e.message).join(', ')}`));
             }
           },
           5.0
         );
 
-        // Immediately send response for half the commands
+        // Immediately send response for half the requests
         if (i % 2 === 0) {
           setTimeout(() => {
             const response: JanusResponse = {
-              commandId,
-              channelId: 'test-channel',
+              requestId,
+              method: 'slow_request',
               success: true,
               result: { index: i },
-              timestamp: Date.now()
+              timestamp: new Date().toISOString()
             };
             tracker.handleResponse(response);
           }, 10);
         }
       }
 
-      // Cancel the odd-numbered commands that won't get responses
+      // Cancel the odd-numbered requests that won't get responses
       setTimeout(() => {
-        for (let i = 1; i < commandCount; i += 2) {
-          const commandId = `concurrent-${i}`;
+        for (let i = 1; i < requestCount; i += 2) {
+          const requestId = `concurrent-${i}`;
           const response: JanusResponse = {
-            commandId,
-            channelId: 'test-channel',
+            requestId,
+            method: 'slow_request',
             success: true,
             result: { index: i },
-            timestamp: Date.now()
+            timestamp: new Date().toISOString()
           };
           tracker.handleResponse(response);
         }
@@ -288,7 +288,7 @@ describe('Timeout Management', () => {
     it('should track timeout statistics correctly', (done) => {
       // Initial stats not needed for this test
       
-      tracker.trackCommand(
+      tracker.trackRequest(
         'stats-test',
         () => {
           const finalStats = tracker.getStatistics();
@@ -304,11 +304,11 @@ describe('Timeout Management', () => {
       // Send response
       setTimeout(() => {
         const response: JanusResponse = {
-          commandId: 'stats-test',
-          channelId: 'test-channel',
+          requestId: 'stats-test',
+          method: 'slow_request',
           success: true,
           result: {},
-          timestamp: Date.now()
+          timestamp: new Date().toISOString()
         };
         tracker.handleResponse(response);
       }, 10);
@@ -316,20 +316,20 @@ describe('Timeout Management', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle duplicate command tracking', (done) => {
-      const commandId = 'duplicate-test';
+    it('should handle duplicate request tracking', (done) => {
+      const requestId = 'duplicate-test';
       
       // First tracking should succeed
-      tracker.trackCommand(
-        commandId,
+      tracker.trackRequest(
+        requestId,
         () => {},
         () => {},
         5.0
       );
 
       // Second tracking should fail
-      tracker.trackCommand(
-        commandId,
+      tracker.trackRequest(
+        requestId,
         () => {
           done(new Error('Should not resolve - should reject duplicate'));
         },
@@ -342,18 +342,18 @@ describe('Timeout Management', () => {
       );
     }, 1000);
 
-    it('should handle command limit exceeded', (done) => {
+    it('should handle request limit exceeded', (done) => {
       const limitedTracker = new ResponseTracker({
-        maxPendingCommands: 2,
+        maxPendingRequests: 2,
         defaultTimeout: 5.0
       });
 
       // Fill up to limit
-      limitedTracker.trackCommand('cmd-1', () => {}, () => {}, 5.0);
-      limitedTracker.trackCommand('cmd-2', () => {}, () => {}, 5.0);
+      limitedTracker.trackRequest('cmd-1', () => {}, () => {}, 5.0);
+      limitedTracker.trackRequest('cmd-2', () => {}, () => {}, 5.0);
 
       // This should fail
-      limitedTracker.trackCommand(
+      limitedTracker.trackRequest(
         'cmd-3',
         () => {
           done(new Error('Should not resolve - should reject limit exceeded'));
@@ -371,12 +371,12 @@ describe('Timeout Management', () => {
 
   describe('Bilateral Timeout Management', () => {
     it('should register request/response timeout pairs', (done) => {
-      const baseCommandId = 'bilateral-test';
+      const baseRequestId = 'bilateral-test';
       let requestTimeoutCalled = false;
       let responseTimeoutCalled = false;
       
       tracker.trackBilateralTimeout(
-        baseCommandId,
+        baseRequestId,
         () => {
           done(new Error('Request should not resolve - should timeout'));
         },
@@ -402,16 +402,16 @@ describe('Timeout Management', () => {
       );
 
       // Verify both timeouts are tracked
-      expect(tracker.isTracking(`${baseCommandId}-request`)).toBe(true);
-      expect(tracker.isTracking(`${baseCommandId}-response`)).toBe(true);
+      expect(tracker.isTracking(`${baseRequestId}-request`)).toBe(true);
+      expect(tracker.isTracking(`${baseRequestId}-response`)).toBe(true);
       expect(tracker.getPendingCount()).toBe(2);
     }, 1000);
 
     it('should cancel bilateral timeouts', () => {
-      const baseCommandId = 'bilateral-cancel-test';
+      const baseRequestId = 'bilateral-cancel-test';
       
       tracker.trackBilateralTimeout(
-        baseCommandId,
+        baseRequestId,
         () => {},
         () => {},
         () => {},
@@ -422,16 +422,16 @@ describe('Timeout Management', () => {
 
       expect(tracker.getPendingCount()).toBe(2);
       
-      const cancelledCount = tracker.cancelBilateralTimeout(baseCommandId);
+      const cancelledCount = tracker.cancelBilateralTimeout(baseRequestId);
       expect(cancelledCount).toBe(2);
       expect(tracker.getPendingCount()).toBe(0);
     });
 
     it('should handle partial bilateral cancellation', () => {
-      const baseCommandId = 'partial-bilateral-test';
+      const baseRequestId = 'partial-bilateral-test';
       
       tracker.trackBilateralTimeout(
-        baseCommandId,
+        baseRequestId,
         () => {},
         () => {},
         () => {},
@@ -441,11 +441,11 @@ describe('Timeout Management', () => {
       );
 
       // Cancel request timeout manually
-      tracker.cancelCommand(`${baseCommandId}-request`);
+      tracker.cancelRequest(`${baseRequestId}-request`);
       expect(tracker.getPendingCount()).toBe(1);
       
       // Cancel bilateral - should only cancel the remaining response timeout
-      const cancelledCount = tracker.cancelBilateralTimeout(baseCommandId);
+      const cancelledCount = tracker.cancelBilateralTimeout(baseRequestId);
       expect(cancelledCount).toBe(1);
       expect(tracker.getPendingCount()).toBe(0);
     });
@@ -453,45 +453,45 @@ describe('Timeout Management', () => {
 
   describe('Timeout Extension', () => {
     it('should return true for extending existing timeout', () => {
-      const commandId = 'extend-test';
+      const requestId = 'extend-test';
       
-      tracker.trackCommand(commandId, () => {}, () => {}, 5.0);
+      tracker.trackRequest(requestId, () => {}, () => {}, 5.0);
       
-      const extended = tracker.extendTimeout(commandId, 2.0);
+      const extended = tracker.extendTimeout(requestId, 2.0);
       expect(extended).toBe(true);
       
       // Cleanup
-      tracker.cancelCommand(commandId);
+      tracker.cancelRequest(requestId);
     });
 
     it('should return false for non-existent timeout extension', () => {
-      const extended = tracker.extendTimeout('non-existent-command', 1.0);
+      const extended = tracker.extendTimeout('non-existent-request', 1.0);
       expect(extended).toBe(false);
     });
 
     it('should update timeout value in statistics', () => {
-      const commandId = 'stats-extend-test';
+      const requestId = 'stats-extend-test';
       
-      tracker.trackCommand(commandId, () => {}, () => {}, 1.0);
+      tracker.trackRequest(requestId, () => {}, () => {}, 1.0);
       
-      const extended = tracker.extendTimeout(commandId, 2.0);
+      const extended = tracker.extendTimeout(requestId, 2.0);
       expect(extended).toBe(true);
       
       // Cleanup
-      tracker.cancelCommand(commandId);
+      tracker.cancelRequest(requestId);
     });
   });
 
   describe('Error-Handled Registration', () => {
     it('should call error callback on registration failure', (done) => {
-      const commandId = 'error-handled-test';
+      const requestId = 'error-handled-test';
       
       // First registration succeeds
-      tracker.trackCommand(commandId, () => {}, () => {}, 5.0);
+      tracker.trackRequest(requestId, () => {}, () => {}, 5.0);
       
       // Second registration should fail and call error callback
-      tracker.trackCommandWithErrorHandling(
-        commandId,
+      tracker.trackRequestWithErrorHandling(
+        requestId,
         () => {
           done(new Error('Should not resolve - should fail registration'));
         },
@@ -507,13 +507,13 @@ describe('Timeout Management', () => {
       );
     }, 1000);
 
-    it('should track command normally when no registration error', (done) => {
-      const commandId = 'error-handled-success-test';
+    it('should track request normally when no registration error', (done) => {
+      const requestId = 'error-handled-success-test';
       
-      tracker.trackCommandWithErrorHandling(
-        commandId,
+      tracker.trackRequestWithErrorHandling(
+        requestId,
         (response) => {
-          expect(response.commandId).toBe(commandId);
+          expect(response.requestId).toBe(requestId);
           done();
         },
         (error) => {
@@ -528,27 +528,27 @@ describe('Timeout Management', () => {
       // Send response
       setTimeout(() => {
         const response: JanusResponse = {
-          commandId,
-          channelId: 'test-channel',
+          requestId,
+          method: 'slow_request',
           success: true,
           result: { success: true },
-          timestamp: Date.now()
+          timestamp: new Date().toISOString()
         };
         tracker.handleResponse(response);
       }, 10);
     }, 1000);
 
-    it('should handle registration with command limit error', (done) => {
+    it('should handle registration with request limit error', (done) => {
       const limitedTracker = new ResponseTracker({
-        maxPendingCommands: 1,
+        maxPendingRequests: 1,
         defaultTimeout: 5.0
       });
 
       // Fill up to limit
-      limitedTracker.trackCommand('limit-cmd', () => {}, () => {}, 5.0);
+      limitedTracker.trackRequest('limit-cmd', () => {}, () => {}, 5.0);
 
       // This should fail and call error handler
-      limitedTracker.trackCommandWithErrorHandling(
+      limitedTracker.trackRequestWithErrorHandling(
         'over-limit-cmd',
         () => {
           done(new Error('Should not resolve - should fail registration'));

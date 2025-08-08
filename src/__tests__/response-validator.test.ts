@@ -3,7 +3,7 @@
  * Validates all response validation scenarios against Manifests
  */
 
-import { ResponseValidator } from '../specification/response-validator';
+import { ResponseValidator } from '../manifest/response-validator';
 import { Manifest, ResponseDefinition } from '../types/protocol';
 
 describe('ResponseValidator', () => {
@@ -16,14 +16,10 @@ describe('ResponseValidator', () => {
       version: '1.0.0',
       name: 'Test API',
       description: 'Test Manifest for response validation',
-      channels: {
-        'test': {
-          name: 'test',
-          description: 'Test channel',
-          commands: {
+      requests: {
             'ping': {
               name: 'ping',
-              description: 'Basic ping command',
+              description: 'Basic ping request',
               response: {
                 type: 'object',
                 description: 'Ping response',
@@ -39,7 +35,7 @@ describe('ResponseValidator', () => {
             },
             'validate': {
               name: 'validate',
-              description: 'JSON validation command',
+              description: 'JSON validation request',
               response: {
                 type: 'object',
                 description: 'Validation result',
@@ -98,10 +94,7 @@ describe('ResponseValidator', () => {
                   }
                 }
               }
-            }
-          }
-        }
-      },
+          },
       models: {
         'UserInfo': {
           name: 'UserInfo',
@@ -128,11 +121,11 @@ describe('ResponseValidator', () => {
         server_id: 'server-001'
       };
 
-      const result = validator.validateCommandResponse(response, 'test', 'ping');
+      const result = validator.validateRequestResponse(response, 'ping');
 
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
-      expect(result.fieldsValidated).toBe(6); // 6 properties in ping response spec
+      expect(result.fieldsValidated).toBe(6); // 6 properties in ping response manifest
       expect(result.validationTime).toBeGreaterThan(0);
     });
 
@@ -146,7 +139,7 @@ describe('ResponseValidator', () => {
         metadata: { custom: 'data' }
       };
 
-      const result = validator.validateCommandResponse(response, 'test', 'ping');
+      const result = validator.validateRequestResponse(response, 'ping');
 
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
@@ -159,7 +152,7 @@ describe('ResponseValidator', () => {
         // Missing timestamp and server_id
       };
 
-      const result = validator.validateCommandResponse(response, 'test', 'ping');
+      const result = validator.validateRequestResponse(response, 'ping');
 
       expect(result.valid).toBe(false);
       expect(result.errors).toHaveLength(2);
@@ -176,7 +169,7 @@ describe('ResponseValidator', () => {
         server_id: null // Should be string, null not allowed for required field
       };
 
-      const result = validator.validateCommandResponse(response, 'test', 'ping');
+      const result = validator.validateRequestResponse(response, 'ping');
 
       expect(result.valid).toBe(false);
       expect(result.errors).toHaveLength(4);
@@ -187,7 +180,7 @@ describe('ResponseValidator', () => {
     });
   });
 
-  describe('Type-Specific Validation', () => {
+  describe('Type-Manifestific Validation', () => {
     test('should validate string patterns', () => {
       const validResponse = {
         implementation: 'TypeScript',
@@ -195,7 +188,7 @@ describe('ResponseValidator', () => {
         protocol: 'SOCK_DGRAM'
       };
 
-      const result = validator.validateCommandResponse(validResponse, 'test', 'get_info');
+      const result = validator.validateRequestResponse(validResponse, 'get_info');
       expect(result.valid).toBe(true);
 
       const invalidResponse = {
@@ -204,7 +197,7 @@ describe('ResponseValidator', () => {
         protocol: 'SOCK_DGRAM'
       };
 
-      const invalidResult = validator.validateCommandResponse(invalidResponse, 'test', 'get_info');
+      const invalidResult = validator.validateRequestResponse(invalidResponse, 'get_info');
       expect(invalidResult.valid).toBe(false);
       expect(invalidResult.errors.some(e => e.field === 'version' && e.message.includes('pattern'))).toBe(true);
     });
@@ -216,7 +209,7 @@ describe('ResponseValidator', () => {
         protocol: 'SOCK_DGRAM'
       };
 
-      const result = validator.validateCommandResponse(validResponse, 'test', 'get_info');
+      const result = validator.validateRequestResponse(validResponse, 'get_info');
       expect(result.valid).toBe(true);
 
       const invalidResponse = {
@@ -225,7 +218,7 @@ describe('ResponseValidator', () => {
         protocol: 'SOCK_STREAM' // Invalid enum value
       };
 
-      const invalidResult = validator.validateCommandResponse(invalidResponse, 'test', 'get_info');
+      const invalidResult = validator.validateRequestResponse(invalidResponse, 'get_info');
       expect(invalidResult.valid).toBe(false);
       expect(invalidResult.errors.some(e => e.field === 'protocol' && e.message.includes('enum'))).toBe(true);
     });
@@ -237,7 +230,7 @@ describe('ResponseValidator', () => {
         count: 10
       };
 
-      const result = validator.validateCommandResponse(validResponse, 'test', 'range_test');
+      const result = validator.validateRequestResponse(validResponse, 'range_test');
       expect(result.valid).toBe(true);
 
       const invalidResponse = {
@@ -246,7 +239,7 @@ describe('ResponseValidator', () => {
         count: 0    // < minimum of 1
       };
 
-      const invalidResult = validator.validateCommandResponse(invalidResponse, 'test', 'range_test');
+      const invalidResult = validator.validateRequestResponse(invalidResponse, 'range_test');
       expect(invalidResult.valid).toBe(false);
       expect(invalidResult.errors).toHaveLength(3);
       expect(invalidResult.errors.some(e => e.field === 'score' && e.message.includes('too large'))).toBe(true);
@@ -261,7 +254,7 @@ describe('ResponseValidator', () => {
         count: 10     // integer is fine
       };
 
-      const result = validator.validateCommandResponse(validResponse, 'test', 'range_test');
+      const result = validator.validateRequestResponse(validResponse, 'range_test');
       expect(result.valid).toBe(true);
 
       const invalidResponse = {
@@ -270,7 +263,7 @@ describe('ResponseValidator', () => {
         count: 10.5   // Should be integer, not float
       };
 
-      const invalidResult = validator.validateCommandResponse(invalidResponse, 'test', 'range_test');
+      const invalidResult = validator.validateRequestResponse(invalidResponse, 'range_test');
       expect(invalidResult.valid).toBe(false);
       expect(invalidResult.errors.some(e => e.field === 'count' && e.message.includes('integer'))).toBe(true);
     });
@@ -281,7 +274,7 @@ describe('ResponseValidator', () => {
         numbers: [1, 2, 3.5]
       };
 
-      const result = validator.validateCommandResponse(validResponse, 'test', 'array_test');
+      const result = validator.validateRequestResponse(validResponse, 'array_test');
       expect(result.valid).toBe(true);
 
       const invalidResponse = {
@@ -289,7 +282,7 @@ describe('ResponseValidator', () => {
         numbers: [1, -5, 'not a number'] // Negative number and wrong type
       };
 
-      const invalidResult = validator.validateCommandResponse(invalidResponse, 'test', 'array_test');
+      const invalidResult = validator.validateRequestResponse(invalidResponse, 'array_test');
       expect(invalidResult.valid).toBe(false);
       expect(invalidResult.errors.length).toBeGreaterThan(0);
       expect(invalidResult.errors.some(e => e.field.includes('[0]') && e.message.includes('too short'))).toBe(true);
@@ -298,49 +291,46 @@ describe('ResponseValidator', () => {
   });
 
   describe('Error Handling', () => {
-    test('should handle missing channel', () => {
+    test('should handle valid request', () => {
+      const response = { status: 'ok', echo: 'test', timestamp: 123456789, server_id: 'server1' };
+
+      const result = validator.validateRequestResponse(response, 'ping');
+
+      expect(result.valid).toBe(true);
+    });
+
+    test('should handle missing request', () => {
       const response = { status: 'ok' };
 
-      const result = validator.validateCommandResponse(response, 'nonexistent', 'ping');
+      const result = validator.validateRequestResponse(response, 'nonexistent');
 
       expect(result.valid).toBe(false);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]?.field).toBe('channelId');
-      expect(result.errors[0]?.message).toContain('Channel \'nonexistent\' not found');
+      expect(result.errors[0]?.field).toBe('request');
+      expect(result.errors[0]?.message).toContain('Request \'nonexistent\' not found');
     });
 
-    test('should handle missing command', () => {
-      const response = { status: 'ok' };
-
-      const result = validator.validateCommandResponse(response, 'test', 'nonexistent');
-
-      expect(result.valid).toBe(false);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]?.field).toBe('command');
-      expect(result.errors[0]?.message).toContain('Command \'nonexistent\' not found');
-    });
-
-    test('should handle missing response specification', () => {
-      // Add command without response specification
-      testManifest.channels.test!.commands.no_response = {
+    test('should handle missing response manifest', () => {
+      // Add request without response manifest
+      testManifest.requests!.no_response = {
         name: 'no_response',
-        description: 'Command without response spec'
+        description: 'Request without response manifest'
         // No response field
       };
 
       validator = new ResponseValidator(testManifest);
       const response = { status: 'ok' };
 
-      const result = validator.validateCommandResponse(response, 'test', 'no_response');
+      const result = validator.validateRequestResponse(response, 'no_response');
 
       expect(result.valid).toBe(false);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]?.field).toBe('response');
-      expect(result.errors[0]?.message).toContain('No response specification defined');
+      expect(result.errors[0]?.message).toContain('No response manifest defined');
     });
 
     test('should handle invalid regex patterns', () => {
-      const invalidSpec: ResponseDefinition = {
+      const invalidManifest: ResponseDefinition = {
         type: 'object',
         description: 'Test with invalid regex',
         properties: {
@@ -349,7 +339,7 @@ describe('ResponseValidator', () => {
       };
 
       const response = { test: 'hello' };
-      const result = validator.validateResponse(response, invalidSpec);
+      const result = validator.validateResponse(response, invalidManifest);
 
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.message.includes('Invalid regex pattern'))).toBe(true);
@@ -367,7 +357,7 @@ describe('ResponseValidator', () => {
         metadata: { custom: 'data', nested: { deep: 'value' } }
       };
 
-      const result = validator.validateCommandResponse(response, 'test', 'ping');
+      const result = validator.validateRequestResponse(response, 'ping');
 
       expect(result.valid).toBe(true);
       expect(result.validationTime).toBeLessThan(2); // Less than 2ms requirement
@@ -379,7 +369,7 @@ describe('ResponseValidator', () => {
         numbers: Array.from({ length: 1000 }, (_, i) => i)
       };
 
-      const result = validator.validateCommandResponse(largeResponse, 'test', 'array_test');
+      const result = validator.validateRequestResponse(largeResponse, 'array_test');
 
       expect(result.valid).toBe(true);
       expect(result.validationTime).toBeLessThan(100); // Should handle large responses efficiently (relaxed for CI/test environments)
@@ -387,13 +377,13 @@ describe('ResponseValidator', () => {
   });
 
   describe('Static Methods', () => {
-    test('should create missing specification error', () => {
-      const result = ResponseValidator.createMissingSpecificationError('test', 'unknown');
+    test('should create missing manifest error', () => {
+      const result = ResponseValidator.createMissingManifestError('test', 'unknown');
 
       expect(result.valid).toBe(false);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0]?.field).toBe('specification');
-      expect(result.errors[0]?.message).toContain('No response specification found');
+      expect(result.errors[0]?.field).toBe('manifest');
+      expect(result.errors[0]?.message).toContain('No response manifest found');
       expect(result.fieldsValidated).toBe(0);
       expect(result.validationTime).toBe(0);
     });
@@ -410,8 +400,8 @@ describe('ResponseValidator', () => {
 
   describe('Model References', () => {
     test('should handle model references', () => {
-      // Add command that uses model reference
-      testManifest.channels.test!.commands.user_info = {
+      // Add request that uses model reference
+      testManifest.requests!.user_info = {
         name: 'user_info',
         description: 'Get user information',
         response: {
@@ -429,7 +419,7 @@ describe('ResponseValidator', () => {
         age: 30
       };
 
-      const result = validator.validateCommandResponse(validResponse, 'test', 'user_info');
+      const result = validator.validateRequestResponse(validResponse, 'user_info');
       expect(result.valid).toBe(true);
 
       const invalidResponse = {
@@ -438,16 +428,16 @@ describe('ResponseValidator', () => {
         age: 200  // Too old
       };
 
-      const invalidResult = validator.validateCommandResponse(invalidResponse, 'test', 'user_info');
+      const invalidResult = validator.validateRequestResponse(invalidResponse, 'user_info');
       expect(invalidResult.valid).toBe(false);
       expect(invalidResult.errors.some(e => e.field === 'name')).toBe(true);
       expect(invalidResult.errors.some(e => e.field === 'age')).toBe(true);
     });
 
     test('should handle missing model reference', () => {
-      testManifest.channels.test!.commands.bad_ref = {
+      testManifest.requests!.bad_ref = {
         name: 'bad_ref',
-        description: 'Command with bad model reference',
+        description: 'Request with bad model reference',
         response: {
           type: 'object',
           description: 'Response with bad model ref',
@@ -458,7 +448,7 @@ describe('ResponseValidator', () => {
       validator = new ResponseValidator(testManifest);
 
       const response = { data: 'test' };
-      const result = validator.validateCommandResponse(response, 'test', 'bad_ref');
+      const result = validator.validateRequestResponse(response, 'bad_ref');
 
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.message.includes('Model reference \'NonexistentModel\' not found'))).toBe(true);

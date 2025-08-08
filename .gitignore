@@ -33,7 +33,7 @@ coverage/
 logs
 *.log
 
-# OS-specific files
+# OS-manifestific files
 .DS_Store
 Thumbs.db
 

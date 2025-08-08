@@ -31,8 +31,8 @@ describe('JanusClient', () => {
 
     // Create mock implementation for CoreJanusClient
     mockCoreClient = {
-      sendCommand: jest.fn(),
-      sendCommandNoResponse: jest.fn(),
+      sendRequest: jest.fn(),
+      sendRequestNoResponse: jest.fn(),
       testConnection: jest.fn()
     } as any;
 
@@ -49,17 +49,17 @@ describe('JanusClient', () => {
       enableValidation: true
     };
 
-    // Default Manifest - using non-reserved commands for testing
+    // Default Manifest - using non-reserved requests for testing
     manifest = {
       version: '1.0.0',
       name: 'Test API',
       channels: {
         'test-channel': {
           name: 'Test Channel',
-          commands: {
+          requests: {
             'custom_ping': {
               name: 'Custom Ping',
-              description: 'Test custom ping command',
+              description: 'Test custom ping request',
               args: {
                 'message': {
                   name: 'Message',
@@ -71,7 +71,7 @@ describe('JanusClient', () => {
             },
             'custom_echo': {
               name: 'Custom Echo',
-              description: 'Custom echo command',
+              description: 'Custom echo request',
               args: {
                 'text': {
                   name: 'Text',
@@ -150,7 +150,7 @@ describe('JanusClient', () => {
     });
   });
 
-  describe('sendCommand', () => {
+  describe('sendRequest', () => {
     let client: JanusClient;
 
     beforeEach(async () => {
@@ -159,9 +159,9 @@ describe('JanusClient', () => {
       (client as any).manifest = manifest;
     });
 
-    test('should send command and return response', async () => {
+    test('should send request and return response', async () => {
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'test-channel',
         success: true,
         result: { message: 'pong' },
@@ -170,16 +170,16 @@ describe('JanusClient', () => {
 
       // Mock UUID generation
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
-      const result = await client.sendCommand('custom_ping', { message: 'hello' });
+      const result = await client.sendRequest('custom_ping', { message: 'hello' });
 
       expect(result).toBe(mockResponse);
-      expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           id: 'test-id',
           channelId: 'test-channel',
-          command: 'custom_ping',
+          request: 'custom_ping',
           args: { message: 'hello' },
           timeout: 30.0
         })
@@ -188,77 +188,77 @@ describe('JanusClient', () => {
 
     test('should use custom timeout', async () => {
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'test-channel',
         success: true,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
-      await client.sendCommand('custom_ping', { message: 'test' }, 10.0);
+      await client.sendRequest('custom_ping', { message: 'test' }, 10.0);
 
-      expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           timeout: 10.0
         })
       );
     });
 
-    test('should throw on command ID mismatch', async () => {
+    test('should throw on request ID mismatch', async () => {
       const mockResponse: JanusResponse = {
-        commandId: 'wrong-id',
+        requestId: 'wrong-id',
         channelId: 'test-channel',
         success: true,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
-      await expect(client.sendCommand('custom_ping', { message: 'test' })).rejects.toThrow(JanusClientError);
-      await expect(client.sendCommand('custom_ping', { message: 'test' })).rejects.toThrow('correlation mismatch');
+      await expect(client.sendRequest('custom_ping', { message: 'test' })).rejects.toThrow(JanusClientError);
+      await expect(client.sendRequest('custom_ping', { message: 'test' })).rejects.toThrow('correlation mismatch');
     });
 
     test('should throw on channel ID mismatch', async () => {
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'wrong-channel',
         success: true,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
-      await expect(client.sendCommand('custom_ping', { message: 'test' })).rejects.toThrow(JanusClientError);
-      await expect(client.sendCommand('custom_ping', { message: 'test' })).rejects.toThrow('Channel mismatch');
+      await expect(client.sendRequest('custom_ping', { message: 'test' })).rejects.toThrow(JanusClientError);
+      await expect(client.sendRequest('custom_ping', { message: 'test' })).rejects.toThrow('Channel mismatch');
     });
 
-    test('should validate command against Manifest', async () => {
-      await expect(client.sendCommand('unknown-command')).rejects.toThrow(JanusClientError);
-      await expect(client.sendCommand('unknown-command')).rejects.toThrow('Unknown command');
+    test('should validate request against Manifest', async () => {
+      await expect(client.sendRequest('unknown-request')).rejects.toThrow(JanusClientError);
+      await expect(client.sendRequest('unknown-request')).rejects.toThrow('Unknown request');
     });
 
     test('should validate required arguments', async () => {
-      await expect(client.sendCommand('custom_ping')).rejects.toThrow(JanusClientError);
-      await expect(client.sendCommand('custom_ping')).rejects.toThrow('Missing required argument');
+      await expect(client.sendRequest('custom_ping')).rejects.toThrow(JanusClientError);
+      await expect(client.sendRequest('custom_ping')).rejects.toThrow('Missing required argument');
     });
 
     test('should allow optional arguments to be missing', async () => {
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'test-channel',
         success: true,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
-      // custom_echo command has optional text argument
-      await expect(client.sendCommand('custom_echo')).resolves.toBe(mockResponse);
+      // custom_echo request has optional text argument
+      await expect(client.sendRequest('custom_echo')).resolves.toBe(mockResponse);
     });
 
     test('should skip validation when disabled', async () => {
@@ -268,21 +268,21 @@ describe('JanusClient', () => {
       });
 
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'test-channel',
         success: true,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
-      // Should not throw even with unknown command
-      await expect(clientNoValidation.sendCommand('unknown-command')).resolves.toBe(mockResponse);
+      // Should not throw even with unknown request
+      await expect(clientNoValidation.sendRequest('unknown-request')).resolves.toBe(mockResponse);
     });
   });
 
-  describe('sendCommandNoResponse', () => {
+  describe('sendRequestNoResponse', () => {
     let client: JanusClient;
 
     beforeEach(async () => {
@@ -291,31 +291,31 @@ describe('JanusClient', () => {
       (client as any).manifest = manifest;
     });
 
-    test('should send command without waiting for response', async () => {
-      mockCoreClient.sendCommandNoResponse.mockResolvedValue(undefined);
+    test('should send request without waiting for response', async () => {
+      mockCoreClient.sendRequestNoResponse.mockResolvedValue(undefined);
 
-      await client.sendCommandNoResponse('custom_echo', { text: 'hello' });
+      await client.sendRequestNoResponse('custom_echo', { text: 'hello' });
 
-      expect(mockCoreClient.sendCommandNoResponse).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendRequestNoResponse).toHaveBeenCalledWith(
         expect.objectContaining({
           channelId: 'test-channel',
-          command: 'custom_echo',
+          request: 'custom_echo',
           args: { text: 'hello' }
         })
       );
     });
 
-    test('should validate command against Manifest', async () => {
-      await expect(client.sendCommandNoResponse('unknown-command')).rejects.toThrow(JanusClientError);
-      await expect(client.sendCommandNoResponse('unknown-command')).rejects.toThrow('Unknown command');
+    test('should validate request against Manifest', async () => {
+      await expect(client.sendRequestNoResponse('unknown-request')).rejects.toThrow(JanusClientError);
+      await expect(client.sendRequestNoResponse('unknown-request')).rejects.toThrow('Unknown request');
     });
 
     test('should not include reply_to field', async () => {
-      mockCoreClient.sendCommandNoResponse.mockResolvedValue(undefined);
+      mockCoreClient.sendRequestNoResponse.mockResolvedValue(undefined);
 
-      await client.sendCommandNoResponse('custom_echo');
+      await client.sendRequestNoResponse('custom_echo');
 
-      expect(mockCoreClient.sendCommandNoResponse).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendRequestNoResponse).toHaveBeenCalledWith(
         expect.not.objectContaining({
           reply_to: expect.anything()
         })
@@ -359,14 +359,14 @@ describe('JanusClient', () => {
 
     test('should return true on successful ping', async () => {
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'test-channel',
         success: true,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
       const result = await client.ping();
       expect(result).toBe(true);
@@ -374,21 +374,21 @@ describe('JanusClient', () => {
 
     test('should return false on failed ping', async () => {
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'test-channel',
         success: false,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
       const result = await client.ping();
       expect(result).toBe(false);
     });
 
     test('should return false on ping error', async () => {
-      mockCoreClient.sendCommand.mockRejectedValue(new Error('Ping failed'));
+      mockCoreClient.sendRequest.mockRejectedValue(new Error('Ping failed'));
 
       const result = await client.ping();
       expect(result).toBe(false);
@@ -396,20 +396,20 @@ describe('JanusClient', () => {
 
     test('should use 10 second timeout for ping', async () => {
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'test-channel',
         success: true,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
       await client.ping();
 
-      expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendRequest).toHaveBeenCalledWith(
         expect.objectContaining({
-          command: 'ping',
+          request: 'ping',
           timeout: 10.0
         })
       );
@@ -459,22 +459,22 @@ describe('JanusClient', () => {
   });
 
   describe('Edge Cases', () => {
-    test('should handle undefined args in sendCommand', async () => {
+    test('should handle undefined args in sendRequest', async () => {
       const client = await JanusClient.create({ ...config, enableValidation: false });
       const mockResponse: JanusResponse = {
-        commandId: 'test-id',
+        requestId: 'test-id',
         channelId: 'test-channel',
         success: true,
         timestamp: Date.now()
       };
 
       mockUuid.mockReturnValue('test-id');
-      mockCoreClient.sendCommand.mockResolvedValue(mockResponse);
+      mockCoreClient.sendRequest.mockResolvedValue(mockResponse);
 
-      await client.sendCommand('custom_echo');
+      await client.sendRequest('custom_echo');
 
       // When no args provided, the args field should not be present in the object
-      expect(mockCoreClient.sendCommand).toHaveBeenCalledWith(
+      expect(mockCoreClient.sendRequest).toHaveBeenCalledWith(
         expect.not.objectContaining({
           args: expect.anything()
         })
@@ -598,7 +598,7 @@ describe('JanusClient', () => {
     });
 
     test('should handle normal-sized messages', async () => {
-      mockCoreClient.sendCommand.mockRejectedValue(new Error('Connection failed'));
+      mockCoreClient.sendRequest.mockRejectedValue(new Error('Connection failed'));
 
       // Test with normal-sized message (should pass validation)
       const normalArgs = {
@@ -606,10 +606,10 @@ describe('JanusClient', () => {
       };
 
       // This should fail with connection error, not validation error
-      await expect(client.sendCommand('custom_echo', normalArgs)).rejects.toThrow('Connection failed');
+      await expect(client.sendRequest('custom_echo', normalArgs)).rejects.toThrow('Connection failed');
       
       // Should be connection error, not message size error
-      expect(mockCoreClient.sendCommand).toHaveBeenCalled();
+      expect(mockCoreClient.sendRequest).toHaveBeenCalled();
     });
 
     test('should detect oversized messages', async () => {
@@ -622,7 +622,7 @@ describe('JanusClient', () => {
 
       // This should fail with size validation error before attempting connection
       try {
-        await client.sendCommand('custom_echo', largeArgs);
+        await client.sendRequest('custom_echo', largeArgs);
         throw new Error('Expected validation error for oversized message');
       } catch (error) {
         // Check if it's a size-related error (implementation may vary)
@@ -642,10 +642,10 @@ describe('JanusClient', () => {
 
       // Test fire-and-forget with large message
       try {
-        await client.sendCommandNoResponse('custom_echo', largeArgs);
+        await client.sendRequestNoResponse('custom_echo', largeArgs);
         throw new Error('Expected validation error for oversized fire-and-forget message');
       } catch (error) {
-        // Message size detection should work for both response and no-response commands
+        // Message size detection should work for both response and no-response requests
         const errorMessage = error instanceof Error ? error.message : String(error);
         console.log('Fire-and-forget large message correctly rejected:', errorMessage);
         expect(error).toBeDefined();

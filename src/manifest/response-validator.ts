@@ -1,6 +1,6 @@
 /**
  * Response Validator for TypeScript Janus Implementation
- * Validates command handler responses against Manifest ResponseDefinition models
+ * Validates request handler responses against Manifest ResponseDefinition models
  * Achieves 100% parity with Go/Rust/Swift implementations
  */
 
@@ -44,14 +44,14 @@ export interface ValidationResult {
 }
 
 /**
- * Response validator that validates command handler responses
+ * Response validator that validates request handler responses
  * against Manifest ResponseDefinition models
  */
 export class ResponseValidator {
-  private specification: Manifest;
+  private manifest: Manifest;
 
-  constructor(specification: Manifest) {
-    this.specification = specification;
+  constructor(manifest: Manifest) {
+    this.manifest = manifest;
   }
 
   /**
@@ -85,49 +85,34 @@ export class ResponseValidator {
   }
 
   /**
-   * Validate a command response by looking up the command specification
+   * Validate a request response by looking up the request manifest
    */
-  public validateCommandResponse(response: any, channelId: string, commandName: string): ValidationResult {
+  public validateRequestResponse(response: any, requestName: string): ValidationResult {
     const startTime = performance.now();
     
-    // Look up command specification
-    const channel = this.specification.channels[channelId];
-    if (!channel) {
+    // Look up request manifest directly (no channels)
+    const request = this.manifest.requests?.[requestName];
+    if (!request) {
       return {
         valid: false,
         errors: [{
-          field: 'channelId',
-          message: `Channel '${channelId}' not found in Manifest`,
-          expected: 'valid channel ID',
-          actual: channelId
+          field: 'request',
+          message: `Request '${requestName}' not found in Manifest`,
+          expected: 'valid request name',
+          actual: requestName
         }],
         validationTime: performance.now() - startTime,
         fieldsValidated: 0
       };
     }
 
-    const command = channel.commands[commandName];
-    if (!command) {
-      return {
-        valid: false,
-        errors: [{
-          field: 'command',
-          message: `Command '${commandName}' not found in channel '${channelId}'`,
-          expected: 'valid command name',
-          actual: commandName
-        }],
-        validationTime: performance.now() - startTime,
-        fieldsValidated: 0
-      };
-    }
-
-    if (!command.response) {
+    if (!request.response) {
       return {
         valid: false,
         errors: [{
           field: 'response',
-          message: `No response specification defined for command '${commandName}'`,
-          expected: 'response specification',
+          message: `No response manifest defined for request '${requestName}'`,
+          expected: 'response manifest',
           actual: 'undefined'
         }],
         validationTime: performance.now() - startTime,
@@ -135,22 +120,22 @@ export class ResponseValidator {
       };
     }
 
-    return this.validateResponse(response, command.response);
+    return this.validateResponse(response, request.response);
   }
 
   /**
-   * Validate a value against an argument specification
+   * Validate a value against an argument manifest
    */
-  private validateValue(value: any, spec: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
+  private validateValue(value: any, manifest: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
     // Handle model references
-    if (spec.modelRef) {
-      const model = this.resolveModelReference(spec.modelRef);
+    if (manifest.modelRef) {
+      const model = this.resolveModelReference(manifest.modelRef);
       if (!model) {
         errors.push({
           field: fieldPath,
-          message: `Model reference '${spec.modelRef}' not found`,
+          message: `Model reference '${manifest.modelRef}' not found`,
           expected: 'valid model reference',
-          actual: spec.modelRef
+          actual: manifest.modelRef
         });
         return;
       }
@@ -160,26 +145,26 @@ export class ResponseValidator {
 
     // Validate type
     const initialErrorCount = errors.length;
-    this.validateType(value, spec.type, fieldPath, errors);
+    this.validateType(value, manifest.type, fieldPath, errors);
 
     if (errors.length > initialErrorCount) {
       return; // Don't continue validation if type is wrong
     }
 
-    // Type-specific validation
-    switch (spec.type) {
+    // Type-manifestific validation
+    switch (manifest.type) {
       case 'string':
-        this.validateString(value, spec, fieldPath, errors);
+        this.validateString(value, manifest, fieldPath, errors);
         break;
       case 'number':
       case 'integer':
-        this.validateNumber(value, spec, fieldPath, errors);
+        this.validateNumber(value, manifest, fieldPath, errors);
         break;
       case 'array':
-        this.validateArray(value, spec, fieldPath, errors);
+        this.validateArray(value, manifest, fieldPath, errors);
         break;
       case 'object':
-        this.validateObject(value, spec, fieldPath, errors);
+        this.validateObject(value, manifest, fieldPath, errors);
         break;
       case 'boolean':
         // Boolean validation is covered by type validation
@@ -187,12 +172,12 @@ export class ResponseValidator {
     }
 
     // Validate enum values (only available on Argument, not ResponseDefinition)
-    if ('enum' in spec && spec.enum && spec.enum.length > 0) {
-      if (!spec.enum.includes(value)) {
+    if ('enum' in manifest && manifest.enum && manifest.enum.length > 0) {
+      if (!manifest.enum.includes(value)) {
         errors.push({
           field: fieldPath,
           message: 'Value is not in allowed enum list',
-          expected: spec.enum.join(', '),
+          expected: manifest.enum.join(', '),
           actual: value
         });
       }
@@ -236,44 +221,44 @@ export class ResponseValidator {
   /**
    * Validate string value
    */
-  private validateString(value: string, spec: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
+  private validateString(value: string, manifest: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
     // Length validation (only available on Argument)
-    if ('minLength' in spec && spec.minLength !== undefined && value.length < spec.minLength) {
+    if ('minLength' in manifest && manifest.minLength !== undefined && value.length < manifest.minLength) {
       errors.push({
         field: fieldPath,
-        message: `String is too short (${value.length} < ${spec.minLength})`,
-        expected: `minimum length ${spec.minLength}`,
+        message: `String is too short (${value.length} < ${manifest.minLength})`,
+        expected: `minimum length ${manifest.minLength}`,
         actual: `length ${value.length}`
       });
     }
 
-    if ('maxLength' in spec && spec.maxLength !== undefined && value.length > spec.maxLength) {
+    if ('maxLength' in manifest && manifest.maxLength !== undefined && value.length > manifest.maxLength) {
       errors.push({
         field: fieldPath,
-        message: `String is too long (${value.length} > ${spec.maxLength})`,
-        expected: `maximum length ${spec.maxLength}`,
+        message: `String is too long (${value.length} > ${manifest.maxLength})`,
+        expected: `maximum length ${manifest.maxLength}`,
         actual: `length ${value.length}`
       });
     }
 
     // Pattern validation (only available on Argument)
-    if ('pattern' in spec && spec.pattern) {
+    if ('pattern' in manifest && manifest.pattern) {
       try {
-        const regex = new RegExp(spec.pattern);
+        const regex = new RegExp(manifest.pattern);
         if (!regex.test(value)) {
           errors.push({
             field: fieldPath,
             message: 'String does not match required pattern',
-            expected: `pattern ${spec.pattern}`,
+            expected: `pattern ${manifest.pattern}`,
             actual: value
           });
         }
       } catch (error) {
         errors.push({
           field: fieldPath,
-          message: 'Invalid regex pattern in specification',
+          message: 'Invalid regex pattern in manifest',
           expected: 'valid regex pattern',
-          actual: spec.pattern
+          actual: manifest.pattern
         });
       }
     }
@@ -282,22 +267,22 @@ export class ResponseValidator {
   /**
    * Validate numeric value
    */
-  private validateNumber(value: number, spec: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
+  private validateNumber(value: number, manifest: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
     // Range validation (only available on Argument)
-    if ('minimum' in spec && spec.minimum !== undefined && value < spec.minimum) {
+    if ('minimum' in manifest && manifest.minimum !== undefined && value < manifest.minimum) {
       errors.push({
         field: fieldPath,
-        message: `Number is too small (${value} < ${spec.minimum})`,
-        expected: `minimum ${spec.minimum}`,
+        message: `Number is too small (${value} < ${manifest.minimum})`,
+        expected: `minimum ${manifest.minimum}`,
         actual: value
       });
     }
 
-    if ('maximum' in spec && spec.maximum !== undefined && value > spec.maximum) {
+    if ('maximum' in manifest && manifest.maximum !== undefined && value > manifest.maximum) {
       errors.push({
         field: fieldPath,
-        message: `Number is too large (${value} > ${spec.maximum})`,
-        expected: `maximum ${spec.maximum}`,
+        message: `Number is too large (${value} > ${manifest.maximum})`,
+        expected: `maximum ${manifest.maximum}`,
         actual: value
       });
     }
@@ -306,49 +291,49 @@ export class ResponseValidator {
   /**
    * Validate array value
    */
-  private validateArray(value: any[], spec: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
-    if (!spec.items) {
-      return; // No item specification, skip item validation
+  private validateArray(value: any[], manifest: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
+    if (!manifest.items) {
+      return; // No item manifest, skip item validation
     }
 
     // Validate each array item
     value.forEach((item, index) => {
       const itemFieldPath = `${fieldPath}[${index}]`;
-      this.validateValue(item, spec.items!, itemFieldPath, errors);
+      this.validateValue(item, manifest.items!, itemFieldPath, errors);
     });
   }
 
   /**
    * Validate object value
    */
-  private validateObject(value: Record<string, any>, spec: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
-    if (!spec.properties) {
-      return; // No property specification, skip property validation
+  private validateObject(value: Record<string, any>, manifest: Argument | ResponseDefinition, fieldPath: string, errors: ValidationError[]): void {
+    if (!manifest.properties) {
+      return; // No property manifest, skip property validation
     }
 
     // Validate each property
-    for (const [propName, propSpec] of Object.entries(spec.properties)) {
+    for (const [propName, propManifest] of Object.entries(manifest.properties)) {
       const propFieldPath = fieldPath ? `${fieldPath}.${propName}` : propName;
       const propValue = value[propName];
 
       // Check required fields
-      if (propSpec.required && (propValue === undefined || propValue === null)) {
+      if (propManifest.required && (propValue === undefined || propValue === null)) {
         errors.push({
           field: propFieldPath,
           message: 'Required field is missing or null',
-          expected: `non-null ${propSpec.type}`,
+          expected: `non-null ${propManifest.type}`,
           actual: propValue
         });
         continue;
       }
 
       // Skip validation for optional missing fields
-      if (propValue === undefined && !propSpec.required) {
+      if (propValue === undefined && !propManifest.required) {
         continue;
       }
 
       // Validate property value
-      this.validateValue(propValue, propSpec, propFieldPath, errors);
+      this.validateValue(propValue, propManifest, propFieldPath, errors);
     }
   }
 
@@ -356,33 +341,33 @@ export class ResponseValidator {
    * Resolve a model reference to its definition
    */
   private resolveModelReference(modelRef: string): Model | null {
-    if (!this.specification.models) {
+    if (!this.manifest.models) {
       return null;
     }
 
-    return this.specification.models[modelRef] || null;
+    return this.manifest.models[modelRef] || null;
   }
 
   /**
    * Count the number of fields that would be validated
    */
-  private countValidatedFields(spec: Argument | ResponseDefinition): number {
-    if (spec.type === 'object' && spec.properties) {
-      return Object.keys(spec.properties).length;
+  private countValidatedFields(manifest: Argument | ResponseDefinition): number {
+    if (manifest.type === 'object' && manifest.properties) {
+      return Object.keys(manifest.properties).length;
     }
     return 1;
   }
 
   /**
-   * Create a validation error for missing response specification
+   * Create a validation error for missing response manifest
    */
-  public static createMissingSpecificationError(channelId: string, commandName: string): ValidationResult {
+  public static createMissingManifestError(channelId: string, requestName: string): ValidationResult {
     return {
       valid: false,
       errors: [{
-        field: 'specification',
-        message: `No response specification found for command '${commandName}' in channel '${channelId}'`,
-        expected: 'response specification',
+        field: 'manifest',
+        message: `No response manifest found for request '${requestName}' in channel '${channelId}'`,
+        expected: 'response manifest',
         actual: 'undefined'
       }],
       validationTime: 0,

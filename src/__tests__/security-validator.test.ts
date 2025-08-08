@@ -64,33 +64,24 @@ describe('SecurityValidator', () => {
   });
 
   describe('validateName', () => {
-    it('should accept valid channel names', () => {
-      const validNames = ['user-service', 'auth_service', 'api123', 'test-channel'];
+    it('should accept valid request names', () => {
+      const validNames = ['user-service', 'auth_service', 'api123', 'test-channel', 'create-user', 'get_data', 'ping', 'test123'];
       
       for (const name of validNames) {
-        const result = validator.validateName(name, 'channel');
-        expect(result.valid).toBe(true);
-      }
-    });
-
-    it('should accept valid command names', () => {
-      const validNames = ['create-user', 'get_data', 'ping', 'test123'];
-      
-      for (const name of validNames) {
-        const result = validator.validateName(name, 'command');
+        const result = validator.validateName(name, 'request');
         expect(result.valid).toBe(true);
       }
     });
 
     it('should reject empty names', () => {
-      const result = validator.validateName('', 'channel');
+      const result = validator.validateName('', 'request');
       expect(result.valid).toBe(false);
       expect(result.code).toBe('EMPTY_NAME');
     });
 
     it('should reject names that are too long', () => {
       const longName = 'a'.repeat(300);
-      const result = validator.validateName(longName, 'command');
+      const result = validator.validateName(longName, 'request');
       expect(result.valid).toBe(false);
       expect(result.code).toBe('NAME_TOO_LONG');
     });
@@ -99,14 +90,14 @@ describe('SecurityValidator', () => {
       const invalidNames = ['test space', 'test@domain', 'test/path', 'test.dot'];
       
       for (const name of invalidNames) {
-        const result = validator.validateName(name, 'channel');
+        const result = validator.validateName(name, 'request');
         expect(result.valid).toBe(false);
         expect(result.code).toBe('INVALID_NAME_CHARACTERS');
       }
     });
 
     it('should reject names with null bytes', () => {
-      const result = validator.validateName('test\x00name', 'command');
+      const result = validator.validateName('test\x00name', 'request');
       expect(result.valid).toBe(false);
       expect(result.code).toBe('NULL_BYTE_INJECTION');
     });
@@ -209,51 +200,51 @@ describe('SecurityValidator', () => {
     });
   });
 
-  describe('validateCommand', () => {
-    it('should accept valid commands', () => {
-      const validCommand = {
+  describe('validateRequest', () => {
+    it('should accept valid requests', () => {
+      const validRequest = {
         id: '550e8400-e29b-41d4-a716-446655440000',
         channelId: 'user-service',
-        command: 'create-user',
+        request: 'create-user',
         args: { username: 'test', email: 'test@example.com' },
         timeout: 30.0,
         timestamp: '2025-07-29T10:50:00.000Z'
       };
       
-      const result = validator.validateCommand(validCommand);
+      const result = validator.validateRequest(validRequest);
       expect(result.valid).toBe(true);
     });
 
-    it('should reject commands missing required fields', () => {
-      const invalidCommand = {
+    it('should reject requests missing required fields', () => {
+      const invalidRequest = {
         channelId: 'user-service',
-        command: 'create-user',
+        request: 'create-user',
         timestamp: '2025-07-29T10:50:00.000Z'
         // Missing id
       };
       
-      const result = validator.validateCommand(invalidCommand);
+      const result = validator.validateRequest(invalidRequest);
       expect(result.valid).toBe(false);
       expect(result.code).toBe('MISSING_REQUIRED_FIELD');
     });
 
-    it('should reject non-object commands', () => {
-      const result = validator.validateCommand('not an object');
+    it('should reject non-object requests', () => {
+      const result = validator.validateRequest('not an object');
       expect(result.valid).toBe(false);
-      expect(result.code).toBe('INVALID_COMMAND_TYPE');
+      expect(result.code).toBe('INVALID_REQUEST_TYPE');
     });
 
-    it('should reject null commands', () => {
-      const result = validator.validateCommand(null);
+    it('should reject null requests', () => {
+      const result = validator.validateRequest(null);
       expect(result.valid).toBe(false);
-      expect(result.code).toBe('INVALID_COMMAND_TYPE');
+      expect(result.code).toBe('INVALID_REQUEST_TYPE');
     });
   });
 
   describe('validateResponse', () => {
     it('should accept valid success responses', () => {
       const validResponse = {
-        commandId: '550e8400-e29b-41d4-a716-446655440000',
+        requestId: '550e8400-e29b-41d4-a716-446655440000',
         channelId: 'user-service',
         success: true,
         result: { userId: '123', status: 'created' },
@@ -266,7 +257,7 @@ describe('SecurityValidator', () => {
 
     it('should accept valid error responses', () => {
       const validResponse = {
-        commandId: '550e8400-e29b-41d4-a716-446655440000',
+        requestId: '550e8400-e29b-41d4-a716-446655440000',
         channelId: 'user-service',
         success: false,
         error: {
@@ -282,7 +273,7 @@ describe('SecurityValidator', () => {
 
     it('should reject responses with both success=true and error field', () => {
       const invalidResponse = {
-        commandId: '550e8400-e29b-41d4-a716-446655440000',
+        requestId: '550e8400-e29b-41d4-a716-446655440000',
         channelId: 'user-service',
         success: true,
         result: { data: 'test' },
@@ -297,7 +288,7 @@ describe('SecurityValidator', () => {
 
     it('should reject failed responses without error field', () => {
       const invalidResponse = {
-        commandId: '550e8400-e29b-41d4-a716-446655440000',
+        requestId: '550e8400-e29b-41d4-a716-446655440000',
         channelId: 'user-service',
         success: false,
         timestamp: '2025-07-29T10:50:01.000Z'

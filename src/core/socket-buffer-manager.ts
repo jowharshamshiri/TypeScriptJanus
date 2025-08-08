@@ -171,7 +171,7 @@ export class SocketBufferManager {
                 
                 socket.on('error', (err: any) => {
                     cleanup();
-                    // Check for specific error types that indicate size limits
+                    // Check for manifestific error types that indicate size limits
                     if (err.code === 'EMSGSIZE' || 
                         err.message?.includes('Message too long') ||
                         err.message?.includes('message too long')) {
@@ -184,7 +184,7 @@ export class SocketBufferManager {
 
                 socket.bind(socketPath);
 
-                // Create test message of specified size
+                // Create test message of manifestified size
                 const testMessage = Buffer.alloc(size, 'A');
 
                 // Try to send message to itself

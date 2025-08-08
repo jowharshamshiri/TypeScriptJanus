@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ManifestParser, ManifestError } from '../specification/manifest-parser';
+import { ManifestParser, ManifestError } from '../manifest/manifest-parser';
 import { Manifest } from '../types/protocol';
 
 describe('ManifestParser', () => {
@@ -15,7 +15,7 @@ describe('ManifestParser', () => {
 
   beforeEach(() => {
     parser = new ManifestParser();
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'janus-spec-test-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'janus-manifest-test-'));
   });
 
   afterEach(() => {
@@ -26,8 +26,8 @@ describe('ManifestParser', () => {
   });
 
   describe('JSON Parsing', () => {
-    test('should parse valid JSON specification', () => {
-      const validSpec = {
+    test('should parse valid JSON manifest', () => {
+      const validManifest = {
         version: '1.0.0',
         name: 'Test API',
         description: 'Test Manifest',
@@ -35,10 +35,10 @@ describe('ManifestParser', () => {
           'test-channel': {
             name: 'Test Channel',
             description: 'Test channel description',
-            commands: {
-              'test_command': {
+            requests: {
+              'test_request': {
                 name: 'Ping',
-                description: 'Test ping command',
+                description: 'Test ping request',
                 args: {
                   'message': {
                     name: 'Message',
@@ -53,29 +53,29 @@ describe('ManifestParser', () => {
         }
       };
 
-      const result = parser.parseJSONString(JSON.stringify(validSpec));
+      const result = parser.parseJSONString(JSON.stringify(validManifest));
       
       expect(result.version).toBe('1.0.0');
       expect(result.name).toBe('Test API');
       expect(result.channels['test-channel']).toBeDefined();
-      expect(result.channels['test-channel']?.commands['test_command']).toBeDefined();
+      expect(result.channels['test-channel']?.requests['test_request']).toBeDefined();
     });
 
     test('should parse JSON from buffer', () => {
-      const spec = {
+      const manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
-              'test_command': {
-                description: 'Test command'
+            requests: {
+              'test_request': {
+                description: 'Test request'
               }
             }
           }
         }
       };
 
-      const buffer = Buffer.from(JSON.stringify(spec), 'utf8');
+      const buffer = Buffer.from(JSON.stringify(manifest), 'utf8');
       const result = parser.parseJSON(buffer);
       
       expect(result.version).toBe('1.0.0');
@@ -96,16 +96,16 @@ describe('ManifestParser', () => {
   });
 
   describe('YAML Parsing', () => {
-    test('should parse valid YAML specification', () => {
-      const yamlSpec = `
+    test('should parse valid YAML manifest', () => {
+      const yamlManifest = `
 version: "1.0.0"
 name: "Test API"
 channels:
   test-channel:
     name: "Test Channel"
-    commands:
-      test_command:
-        description: "Test ping command"
+    requests:
+      test_request:
+        description: "Test ping request"
         args:
           message:
             type: string
@@ -113,7 +113,7 @@ channels:
             required: true
 `;
 
-      const result = parser.parseYAMLString(yamlSpec);
+      const result = parser.parseYAMLString(yamlManifest);
       
       expect(result.version).toBe('1.0.0');
       expect(result.name).toBe('Test API');
@@ -121,7 +121,7 @@ channels:
     });
 
     test('should parse YAML from buffer', () => {
-      const yamlContent = 'version: "1.0.0"\nchannels:\n  test:\n    commands:\n      test_command:\n        description: "Test"';
+      const yamlContent = 'version: "1.0.0"\nchannels:\n  test:\n    requests:\n      test_request:\n        description: "Test"';
       const buffer = Buffer.from(yamlContent, 'utf8');
       
       const result = parser.parseYAML(buffer);
@@ -138,13 +138,13 @@ channels:
 
   describe('File Parsing', () => {
     test('should parse JSON file', () => {
-      const spec = {
+      const manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
-              'test_command': {
-                description: 'Test command'
+            requests: {
+              'test_request': {
+                description: 'Test request'
               }
             }
           }
@@ -152,14 +152,14 @@ channels:
       };
 
       const filePath = path.join(tempDir, 'test.json');
-      fs.writeFileSync(filePath, JSON.stringify(spec));
+      fs.writeFileSync(filePath, JSON.stringify(manifest));
       
       const result = parser.parseFromFile(filePath);
       expect(result.version).toBe('1.0.0');
     });
 
     test('should parse YAML file', () => {
-      const yamlContent = 'version: "1.0.0"\nchannels:\n  test:\n    commands:\n      test_command:\n        description: "Test"';
+      const yamlContent = 'version: "1.0.0"\nchannels:\n  test:\n    requests:\n      test_request:\n        description: "Test"';
       const filePath = path.join(tempDir, 'test.yaml');
       fs.writeFileSync(filePath, yamlContent);
       
@@ -168,7 +168,7 @@ channels:
     });
 
     test('should parse YML file', () => {
-      const yamlContent = 'version: "1.0.0"\nchannels:\n  test:\n    commands:\n      test_command:\n        description: "Test"';
+      const yamlContent = 'version: "1.0.0"\nchannels:\n  test:\n    requests:\n      test_request:\n        description: "Test"';
       const filePath = path.join(tempDir, 'test.yml');
       fs.writeFileSync(filePath, yamlContent);
       
@@ -192,34 +192,34 @@ channels:
     });
   });
 
-  describe('Specification Validation', () => {
-    test('should validate valid specification', () => {
-      const validSpec: Manifest = {
+  describe('Manifest Validation', () => {
+    test('should validate valid manifest', () => {
+      const validManifest: Manifest = {
         version: '1.0.0',
         name: 'Test API',
         channels: {
           'test-channel': {
             name: 'Test Channel',
-            commands: {
-              'test_command': {
+            requests: {
+              'test_request': {
                 name: 'Ping',
-                description: 'Test ping command'
+                description: 'Test ping request'
               }
             }
           }
         }
       };
 
-      expect(() => ManifestParser.validate(validSpec)).not.toThrow();
+      expect(() => ManifestParser.validate(validManifest)).not.toThrow();
     });
 
     test('should throw on empty version', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '',
         channels: {
           'test': {
-            commands: {
-              'test_command': {
+            requests: {
+              'test_request': {
                 description: 'Test'
               }
             }
@@ -227,15 +227,15 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('API version cannot be empty');
+      expect(() => ManifestParser.validate(manifest)).toThrow('API version cannot be empty');
     });
 
     test('should throw on missing version', () => {
-      const spec = {
+      const manifest = {
         channels: {
           'test': {
-            commands: {
-              'test_command': {
+            requests: {
+              'test_request': {
                 description: 'Test'
               }
             }
@@ -243,33 +243,33 @@ channels:
         }
       } as any as Manifest;
 
-      expect(() => ManifestParser.validate(spec)).toThrow('API version cannot be empty');
+      expect(() => ManifestParser.validate(manifest)).toThrow('API version cannot be empty');
     });
 
     test('should throw on empty channels', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {}
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('API must define at least one channel');
+      expect(() => ManifestParser.validate(manifest)).toThrow('API must define at least one channel');
     });
 
     test('should throw on missing channels', () => {
-      const spec = {
+      const manifest = {
         version: '1.0.0'
       } as Manifest;
 
-      expect(() => ManifestParser.validate(spec)).toThrow('API must define at least one channel');
+      expect(() => ManifestParser.validate(manifest)).toThrow('API must define at least one channel');
     });
 
     test('should throw on empty channel ID', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           '': {
-            commands: {
-              'test_command': {
+            requests: {
+              'test_request': {
                 description: 'Test'
               }
             }
@@ -277,28 +277,28 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Channel ID cannot be empty');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Channel ID cannot be empty');
     });
 
-    test('should throw on empty commands in channel', () => {
-      const spec: Manifest = {
+    test('should throw on empty requests in channel', () => {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test-channel': {
-            commands: {}
+            requests: {}
           }
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('must define at least one command');
+      expect(() => ManifestParser.validate(manifest)).toThrow('must define at least one request');
     });
 
-    test('should throw on empty command name', () => {
-      const spec: Manifest = {
+    test('should throw on empty request name', () => {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test-channel': {
-            commands: {
+            requests: {
               '': {
                 description: 'Test'
               }
@@ -307,16 +307,16 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Command name cannot be empty');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Request name cannot be empty');
     });
 
-    test('should throw on missing command description', () => {
-      const spec: Manifest = {
+    test('should throw on missing request description', () => {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test-channel': {
-            commands: {
-              'test_command': {
+            requests: {
+              'test_request': {
                 name: 'Ping'
               } as any
             }
@@ -324,16 +324,16 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('must have a description');
+      expect(() => ManifestParser.validate(manifest)).toThrow('must have a description');
     });
 
-    test('should throw on empty command description', () => {
-      const spec: Manifest = {
+    test('should throw on empty request description', () => {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test-channel': {
-            commands: {
-              'test_command': {
+            requests: {
+              'test_request': {
                 description: ''
               }
             }
@@ -341,17 +341,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('must have a description');
+      expect(() => ManifestParser.validate(manifest)).toThrow('must have a description');
     });
   });
 
   describe('Argument Validation', () => {
     test('should validate string arguments with pattern', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'validate_data': {
                 description: 'Test validation',
                 args: {
@@ -367,15 +367,15 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).not.toThrow();
+      expect(() => ManifestParser.validate(manifest)).not.toThrow();
     });
 
     test('should throw on invalid regex pattern', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'validate_data': {
                 description: 'Test validation',
                 args: {
@@ -391,17 +391,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Invalid regex pattern');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Invalid regex pattern');
     });
 
     test('should throw on invalid argument type', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'test': {
-                description: 'Test command',
+                description: 'Test request',
                 args: {
                   'field': {
                     type: 'invalid-type' as any,
@@ -414,17 +414,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Invalid argument type');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Invalid argument type');
     });
 
     test('should throw on invalid numeric constraints', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'test': {
-                description: 'Test command',
+                description: 'Test request',
                 args: {
                   'number': {
                     type: 'number',
@@ -439,17 +439,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Invalid numeric constraints');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Invalid numeric constraints');
     });
 
     test('should throw on invalid model reference', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'test': {
-                description: 'Test command',
+                description: 'Test request',
                 args: {
                   'data': {
                     type: 'object',
@@ -470,17 +470,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Model reference \'NonExistentModel\' not found');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Model reference \'NonExistentModel\' not found');
     });
 
     test('should validate nested array items', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'test': {
-                description: 'Test command',
+                description: 'Test request',
                 args: {
                   'list': {
                     type: 'array',
@@ -497,17 +497,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).not.toThrow();
+      expect(() => ManifestParser.validate(manifest)).not.toThrow();
     });
 
     test('should validate nested object properties', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'test': {
-                description: 'Test command',
+                description: 'Test request',
                 args: {
                   'config': {
                     type: 'object',
@@ -530,17 +530,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).not.toThrow();
+      expect(() => ManifestParser.validate(manifest)).not.toThrow();
     });
 
     test('should throw on empty argument name', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'test': {
-                description: 'Test command',
+                description: 'Test request',
                 args: {
                   '': {
                     type: 'string',
@@ -553,17 +553,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Argument name cannot be empty');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Argument name cannot be empty');
     });
   });
 
   describe('Response Validation', () => {
     test('should validate response definition', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'get-data': {
                 description: 'Get data',
                 response: {
@@ -582,17 +582,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).not.toThrow();
+      expect(() => ManifestParser.validate(manifest)).not.toThrow();
     });
 
     test('should throw on invalid response type', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'test': {
-                description: 'Test command',
+                description: 'Test request',
                 response: {
                   type: 'invalid-type' as any,
                   description: 'Invalid response'
@@ -603,17 +603,17 @@ channels:
         }
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Invalid response type');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Invalid response type');
     });
 
     test('should throw on invalid response model reference', () => {
-      const spec: Manifest = {
+      const manifest: Manifest = {
         version: '1.0.0',
         channels: {
           'test': {
-            commands: {
+            requests: {
               'test': {
-                description: 'Test command',
+                description: 'Test request',
                 response: {
                   type: 'object',
                   description: 'Test response',
@@ -626,37 +626,37 @@ channels:
         models: {}
       };
 
-      expect(() => ManifestParser.validate(spec)).toThrow('Model reference \'NonExistentModel\' not found');
+      expect(() => ManifestParser.validate(manifest)).toThrow('Model reference \'NonExistentModel\' not found');
     });
   });
 
   describe('Multi-File Parsing', () => {
     test('should parse and merge multiple files', () => {
-      // Create first spec file
-      const spec1 = {
+      // Create first manifest file
+      const manifest1 = {
         version: '1.0.0',
         name: 'Base API',
         channels: {
           'base': {
             description: 'Base channel',
-            commands: {
+            requests: {
               'base_cmd': {
-                description: 'Base command'
+                description: 'Base request'
               }
             }
           }
         }
       };
 
-      const spec2 = {
+      const manifest2 = {
         version: '1.0.0',
         name: 'Extension API',
         channels: {
           'extension': {
             description: 'Extension channel',
-            commands: {
+            requests: {
               'ext_cmd': {
-                description: 'Extension command'
+                description: 'Extension request'
               }
             }
           }
@@ -673,61 +673,61 @@ channels:
       const file1 = path.join(tempDir, 'base.json');
       const file2 = path.join(tempDir, 'extension.json');
 
-      fs.writeFileSync(file1, JSON.stringify(spec1, null, 2));
-      fs.writeFileSync(file2, JSON.stringify(spec2, null, 2));
+      fs.writeFileSync(file1, JSON.stringify(manifest1, null, 2));
+      fs.writeFileSync(file2, JSON.stringify(manifest2, null, 2));
 
       const merged = parser.parseMultipleFiles([file1, file2]);
 
       expect(merged.channels).toHaveProperty('base');
       expect(merged.channels).toHaveProperty('extension');
       expect(merged.models).toHaveProperty('ExtModel');
-      expect(merged.channels['base']?.commands).toHaveProperty('base_cmd');
-      expect(merged.channels['extension']?.commands).toHaveProperty('ext_cmd');
+      expect(merged.channels['base']?.requests).toHaveProperty('base_cmd');
+      expect(merged.channels['extension']?.requests).toHaveProperty('ext_cmd');
     });
 
     test('should throw on duplicate channel names', () => {
-      const spec1 = {
+      const manifest1 = {
         version: '1.0.0',
         channels: {
           'shared': {
             description: 'First shared channel',
-            commands: {
-              'cmd1': { description: 'Command 1' }
+            requests: {
+              'cmd1': { description: 'Request 1' }
             }
           }
         }
       };
 
-      const spec2 = {
+      const manifest2 = {
         version: '1.0.0',
         channels: {
           'shared': {
             description: 'Second shared channel',
-            commands: {
-              'cmd2': { description: 'Command 2' }
+            requests: {
+              'cmd2': { description: 'Request 2' }
             }
           }
         }
       };
 
-      const file1 = path.join(tempDir, 'spec1.json');
-      const file2 = path.join(tempDir, 'spec2.json');
+      const file1 = path.join(tempDir, 'manifest1.json');
+      const file2 = path.join(tempDir, 'manifest2.json');
 
-      fs.writeFileSync(file1, JSON.stringify(spec1, null, 2));
-      fs.writeFileSync(file2, JSON.stringify(spec2, null, 2));
+      fs.writeFileSync(file1, JSON.stringify(manifest1, null, 2));
+      fs.writeFileSync(file2, JSON.stringify(manifest2, null, 2));
 
       expect(() => parser.parseMultipleFiles([file1, file2]))
-        .toThrow("Channel 'shared' already exists in base specification");
+        .toThrow("Channel 'shared' already exists in base manifest");
     });
 
     test('should throw on duplicate model names', () => {
-      const spec1 = {
+      const manifest1 = {
         version: '1.0.0',
         channels: {
           'ch1': {
             description: 'Channel 1',
-            commands: {
-              'cmd1': { description: 'Command 1' }
+            requests: {
+              'cmd1': { description: 'Request 1' }
             }
           }
         },
@@ -740,13 +740,13 @@ channels:
         }
       };
 
-      const spec2 = {
+      const manifest2 = {
         version: '1.0.0',
         channels: {
           'ch2': {
             description: 'Channel 2',
-            commands: {
-              'cmd2': { description: 'Command 2' }
+            requests: {
+              'cmd2': { description: 'Request 2' }
             }
           }
         },
@@ -759,14 +759,14 @@ channels:
         }
       };
 
-      const file1 = path.join(tempDir, 'spec1.json');
-      const file2 = path.join(tempDir, 'spec2.json');
+      const file1 = path.join(tempDir, 'manifest1.json');
+      const file2 = path.join(tempDir, 'manifest2.json');
 
-      fs.writeFileSync(file1, JSON.stringify(spec1, null, 2));
-      fs.writeFileSync(file2, JSON.stringify(spec2, null, 2));
+      fs.writeFileSync(file1, JSON.stringify(manifest1, null, 2));
+      fs.writeFileSync(file2, JSON.stringify(manifest2, null, 2));
 
       expect(() => parser.parseMultipleFiles([file1, file2]))
-        .toThrow("Model 'SharedModel' already exists in base specification");
+        .toThrow("Model 'SharedModel' already exists in base manifest");
     });
 
     test('should throw on empty file list', () => {
@@ -776,16 +776,16 @@ channels:
   });
 
   describe('Serialization', () => {
-    const testSpec: Manifest = {
+    const testManifest: Manifest = {
       version: '1.0.0',
       name: 'Test API',
       description: 'Test serialization',
       channels: {
         'test': {
           description: 'Test channel',
-          commands: {
+          requests: {
             'test_cmd': {
-              description: 'Test command',
+              description: 'Test request',
               args: {
                 'message': {
                   type: 'string',
@@ -800,23 +800,23 @@ channels:
     };
 
     test('should serialize to compact JSON', () => {
-      const json = parser.serializeToJSON(testSpec, false);
+      const json = parser.serializeToJSON(testManifest, false);
       
       expect(typeof json).toBe('string');
-      expect(JSON.parse(json)).toEqual(testSpec);
+      expect(JSON.parse(json)).toEqual(testManifest);
       expect(json.includes('\n')).toBe(false); // Compact format
     });
 
     test('should serialize to pretty JSON', () => {
-      const json = parser.serializeToJSON(testSpec, true);
+      const json = parser.serializeToJSON(testManifest, true);
       
       expect(typeof json).toBe('string');
-      expect(JSON.parse(json)).toEqual(testSpec);
+      expect(JSON.parse(json)).toEqual(testManifest);
       expect(json.includes('\n')).toBe(true); // Pretty format
     });
 
     test('should serialize to YAML', () => {
-      const yaml = parser.serializeToYAML(testSpec);
+      const yaml = parser.serializeToYAML(testManifest);
       
       expect(typeof yaml).toBe('string');
       expect(yaml.includes('version: 1.0.0')).toBe(true);
@@ -824,34 +824,34 @@ channels:
     });
 
     test('should validate before serialization', () => {
-      const invalidSpec = {
+      const invalidManifest = {
         version: '',
         channels: {}
       } as Manifest;
 
-      expect(() => parser.serializeToJSON(invalidSpec))
+      expect(() => parser.serializeToJSON(invalidManifest))
         .toThrow('API version cannot be empty');
       
-      expect(() => parser.serializeToYAML(invalidSpec))
+      expect(() => parser.serializeToYAML(invalidManifest))
         .toThrow('API version cannot be empty');
     });
   });
 
   describe('Static Interface Methods', () => {
     test('should provide static parseJSON method', () => {
-      const spec = {
+      const manifest = {
         version: '1.0.0',
         channels: {
           'test': {
             description: 'Test channel',
-            commands: {
-              'test': { description: 'Test command' }
+            requests: {
+              'test': { description: 'Test request' }
             }
           }
         }
       };
 
-      const jsonBuffer = Buffer.from(JSON.stringify(spec));
+      const jsonBuffer = Buffer.from(JSON.stringify(manifest));
       const parsed = ManifestParser.parseJSON(jsonBuffer);
 
       expect(parsed.version).toBe('1.0.0');
@@ -864,9 +864,9 @@ version: "1.0.0"
 channels:
   test:
     description: "Test channel"
-    commands:
+    requests:
       test:
-        description: "Test command"
+        description: "Test request"
 `;
 
       const yamlBuffer = Buffer.from(yamlContent);
@@ -877,20 +877,20 @@ channels:
     });
 
     test('should provide static parseFromFile method', () => {
-      const spec = {
+      const manifest = {
         version: '1.0.0',
         channels: {
           'test': {
             description: 'Test channel',
-            commands: {
-              'test': { description: 'Test command' }
+            requests: {
+              'test': { description: 'Test request' }
             }
           }
         }
       };
 
       const testFile = path.join(tempDir, 'static-test.json');
-      fs.writeFileSync(testFile, JSON.stringify(spec, null, 2));
+      fs.writeFileSync(testFile, JSON.stringify(manifest, null, 2));
 
       const parsed = ManifestParser.parseFromFile(testFile);
 
@@ -899,22 +899,22 @@ channels:
     });
 
     test('should provide static parseMultipleFiles method', () => {
-      const spec1 = {
+      const manifest1 = {
         version: '1.0.0',
         channels: {
           'ch1': {
             description: 'Channel 1',
-            commands: { 'cmd1': { description: 'Command 1' } }
+            requests: { 'cmd1': { description: 'Request 1' } }
           }
         }
       };
 
-      const spec2 = {
+      const manifest2 = {
         version: '1.0.0',
         channels: {
           'ch2': {
             description: 'Channel 2', 
-            commands: { 'cmd2': { description: 'Command 2' } }
+            requests: { 'cmd2': { description: 'Request 2' } }
           }
         }
       };
@@ -922,8 +922,8 @@ channels:
       const file1 = path.join(tempDir, 'static1.json');
       const file2 = path.join(tempDir, 'static2.json');
 
-      fs.writeFileSync(file1, JSON.stringify(spec1, null, 2));
-      fs.writeFileSync(file2, JSON.stringify(spec2, null, 2));
+      fs.writeFileSync(file1, JSON.stringify(manifest1, null, 2));
+      fs.writeFileSync(file2, JSON.stringify(manifest2, null, 2));
 
       const merged = ManifestParser.parseMultipleFiles([file1, file2]);
 

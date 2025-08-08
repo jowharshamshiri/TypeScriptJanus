@@ -7,7 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse as parseYAML } from 'yaml';
-import { Manifest, Channel, Command, Argument, Model } from '../types/protocol';
+import { Manifest, Request, Argument, Model } from '../types/protocol';
 
 /**
  * Error thrown during Manifest parsing or validation
@@ -129,26 +129,21 @@ export class ManifestParser {
    * Validate Manifest structure and content
    * Static method matching Swift implementation pattern
    */
-  public static validate(spec: Manifest): void {
+  public static validate(manifest: Manifest): void {
     // Validate version format
-    if (!spec.version || spec.version.trim() === '') {
+    if (!manifest.version || manifest.version.trim() === '') {
       throw new ManifestError(
         'API version cannot be empty',
         'Version field is required and must be non-empty string'
       );
     }
 
-    // Validate channels exist
-    if (!spec.channels || Object.keys(spec.channels).length === 0) {
-      throw new ManifestError(
-        'API must define at least one channel',
-        'Channels object is required and must contain at least one channel definition'
-      );
-    }
-
-    // Validate each channel
-    for (const [channelId, channel] of Object.entries(spec.channels)) {
-      this.validateChannel(channelId, channel, spec.models);
+    // Validate requests exist (channels removed)
+    if (manifest.requests && Object.keys(manifest.requests).length > 0) {
+      // Validate each request
+      for (const [requestName, request] of Object.entries(manifest.requests)) {
+        this.validateRequest(requestName, request, manifest.models);
+      }
     }
   }
 
@@ -159,92 +154,63 @@ export class ManifestParser {
     // Basic structure validation
     if (!parsed || typeof parsed !== 'object') {
       throw new ManifestError(
-        'Invalid specification format',
+        'Invalid manifest format',
         'Root object is required'
       );
     }
 
     // Transform to typed structure
-    const spec: Manifest = {
+    const manifest: Manifest = {
       version: parsed.version,
       name: parsed.name,
       description: parsed.description,
-      channels: parsed.channels || {},
+      requests: parsed.requests || {},
       models: parsed.models
     };
 
-    // Validate the transformed specification
-    ManifestParser.validate(spec);
+    // Validate the transformed manifest
+    ManifestParser.validate(manifest);
 
-    return spec;
+    return manifest;
   }
 
   /**
-   * Validate individual channel structure
+   * Validate individual request structure
    */
-  private static validateChannel(channelId: string, channel: Channel, models?: Record<string, Model>): void {
-    if (!channelId || channelId.trim() === '') {
+  private static validateRequest(requestName: string, request: Request, models?: Record<string, Model>): void {
+    if (!requestName || requestName.trim() === '') {
       throw new ManifestError(
-        'Channel ID cannot be empty',
-        'Channel identifiers must be non-empty strings'
+        'Request name cannot be empty',
+        'Request names must be non-empty strings'
       );
     }
 
-    if (!channel.commands || Object.keys(channel.commands).length === 0) {
+    // Check for reserved request names (matching Go/Rust/Swift)
+    const reservedRequests = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'manifest'];
+    if (reservedRequests.includes(requestName)) {
       throw new ManifestError(
-        `Channel '${channelId}' must define at least one command`,
-        'Each channel must contain at least one command definition'
+        `Request '${requestName}' is reserved and cannot be defined in Manifest`,
+        `Reserved requests: ${reservedRequests.join(', ')}`
       );
     }
 
-    // Validate each command in the channel
-    for (const [commandName, command] of Object.entries(channel.commands)) {
-      this.validateCommand(channelId, commandName, command, models);
-    }
-  }
-
-  /**
-   * Validate individual command structure
-   */
-  private static validateCommand(
-    channelId: string, 
-    commandName: string, 
-    command: Command, 
-    models?: Record<string, Model>
-  ): void {
-    if (!commandName || commandName.trim() === '') {
+    if (!request.description || request.description.trim() === '') {
       throw new ManifestError(
-        `Command name cannot be empty in channel '${channelId}'`,
-        'Command names must be non-empty strings'
+        `Request '${requestName}' must have a description`,
+        'Request descriptions are required for API documentation'
       );
     }
 
-    // Check for reserved command names (matching Go/Rust/Swift)
-    const reservedCommands = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'spec'];
-    if (reservedCommands.includes(commandName)) {
-      throw new ManifestError(
-        `Command '${commandName}' is reserved and cannot be defined in Manifest`,
-        `Reserved commands: ${reservedCommands.join(', ')}`
-      );
-    }
-
-    if (!command.description || command.description.trim() === '') {
-      throw new ManifestError(
-        `Command '${commandName}' in channel '${channelId}' must have a description`,
-        'Command descriptions are required for API documentation'
-      );
-    }
-
-    // Validate command arguments if present
-    if (command.args) {
-      for (const [argName, arg] of Object.entries(command.args)) {
-        this.validateArgument(channelId, commandName, argName, arg, models);
+    // Validate request arguments if present
+    if (request.args) {
+      for (const [argName, arg] of Object.entries(request.args)) {
+        this.validateArgument(requestName, argName, arg, models);
       }
     }
 
     // Validate response definition if present
-    if (command.response) {
-      this.validateResponseDefinition(channelId, commandName, command.response, models);
+    if (request.response) {
+      this.validateResponseDefinition(requestName, request.response, models);
     }
   }
 
@@ -252,15 +218,14 @@ export class ManifestParser {
    * Validate argument definition with type checking and constraints
    */
   private static validateArgument(
-    channelId: string,
-    commandName: string,
+    requestName: string,
     argName: string,
     arg: Argument,
     models?: Record<string, Model>
   ): void {
     if (!argName || argName.trim() === '') {
       throw new ManifestError(
-        `Argument name cannot be empty in command '${commandName}' of channel '${channelId}'`,
+        `Argument name cannot be empty in request '${requestName}'`,
         'Argument names must be non-empty strings'
       );
     }
@@ -269,7 +234,7 @@ export class ManifestParser {
     const validTypes = ['string', 'number', 'integer', 'boolean', 'array', 'object'];
     if (!validTypes.includes(arg.type)) {
       throw new ManifestError(
-        `Invalid argument type '${arg.type}' for argument '${argName}' in command '${commandName}' of channel '${channelId}'`,
+        `Invalid argument type '${arg.type}' for argument '${argName}' in request '${requestName}'`,
         `Valid types: ${validTypes.join(', ')}`
       );
     }
@@ -280,7 +245,7 @@ export class ManifestParser {
         new RegExp(arg.pattern);
       } catch (error) {
         throw new ManifestError(
-          `Invalid regex pattern '${arg.pattern}' for argument '${argName}' in command '${commandName}' of channel '${channelId}'`,
+          `Invalid regex pattern '${arg.pattern}' for argument '${argName}' in request '${requestName}'`,
           error instanceof Error ? error.message : 'Regex compilation failed'
         );
       }
@@ -290,7 +255,7 @@ export class ManifestParser {
     if ((arg.type === 'number' || arg.type === 'integer') && arg.minimum !== undefined && arg.maximum !== undefined) {
       if (arg.minimum > arg.maximum) {
         throw new ManifestError(
-          `Invalid numeric constraints for argument '${argName}' in command '${commandName}' of channel '${channelId}'`,
+          `Invalid numeric constraints for argument '${argName}' in request '${requestName}'`,
           `Minimum value (${arg.minimum}) cannot be greater than maximum value (${arg.maximum})`
         );
       }
@@ -299,20 +264,20 @@ export class ManifestParser {
     // Validate model references
     if (arg.modelRef && models && !models[arg.modelRef]) {
       throw new ManifestError(
-        `Model reference '${arg.modelRef}' not found for argument '${argName}' in command '${commandName}' of channel '${channelId}'`,
+        `Model reference '${arg.modelRef}' not found for argument '${argName}' in request '${requestName}'`,
         'Referenced models must be defined in the models section'
       );
     }
 
     // Validate array item definitions
     if (arg.type === 'array' && arg.items) {
-      this.validateArgument(channelId, commandName, `${argName}[items]`, arg.items, models);
+      this.validateArgument(requestName, `${argName}[items]`, arg.items, models);
     }
 
     // Validate object properties
     if (arg.type === 'object' && arg.properties) {
       for (const [propName, prop] of Object.entries(arg.properties)) {
-        this.validateArgument(channelId, commandName, `${argName}.${propName}`, prop, models);
+        this.validateArgument(requestName, `${argName}.${propName}`, prop, models);
       }
     }
   }
@@ -321,15 +286,14 @@ export class ManifestParser {
    * Validate response definition structure
    */
   private static validateResponseDefinition(
-    channelId: string,
-    commandName: string,
+    requestName: string,
     response: any,
     models?: Record<string, Model>
   ): void {
     const validTypes = ['string', 'number', 'integer', 'boolean', 'array', 'object'];
     if (!validTypes.includes(response.type)) {
       throw new ManifestError(
-        `Invalid response type '${response.type}' for command '${commandName}' in channel '${channelId}'`,
+        `Invalid response type '${response.type}' for request '${requestName}'`,
         `Valid types: ${validTypes.join(', ')}`
       );
     }
@@ -337,14 +301,14 @@ export class ManifestParser {
     // Validate model references
     if (response.modelRef && models && !models[response.modelRef]) {
       throw new ManifestError(
-        `Model reference '${response.modelRef}' not found for response in command '${commandName}' of channel '${channelId}'`,
+        `Model reference '${response.modelRef}' not found for response in request '${requestName}'`,
         'Referenced models must be defined in the models section'
       );
     }
   }
 
   /**
-   * Parse multiple specification files and merge them
+   * Parse multiple manifest files and merge them
    * Useful for modular Manifests (matches Go implementation)
    */
   public parseMultipleFiles(filePaths: string[]): Manifest {
@@ -360,7 +324,7 @@ export class ManifestParser {
     if (!firstFile) {
       throw new ManifestError('First file path is undefined');
     }
-    const baseSpec = this.parseFromFile(firstFile);
+    const baseManifest = this.parseFromFile(firstFile);
 
     // Merge additional files
     for (let i = 1; i < filePaths.length; i++) {
@@ -369,30 +333,35 @@ export class ManifestParser {
         throw new ManifestError(`File path at index ${i} is undefined`);
       }
       
-      const additionalSpec = this.parseFromFile(filePath);
-      this.mergeSpecifications(baseSpec, additionalSpec);
+      const additionalManifest = this.parseFromFile(filePath);
+      this.mergeManifests(baseManifest, additionalManifest);
     }
 
-    // Validate merged specification
-    ManifestParser.validate(baseSpec);
+    // Validate merged manifest
+    ManifestParser.validate(baseManifest);
 
-    return baseSpec;
+    return baseManifest;
   }
 
   /**
    * Merge two Manifests
-   * The additional spec's channels and models are added to the base spec
+   * The additional manifest's requests and models are added to the base manifest
    */
-  private mergeSpecifications(base: Manifest, additional: Manifest): void {
-    // Merge channels
-    for (const [channelId, channel] of Object.entries(additional.channels)) {
-      if (base.channels[channelId]) {
-        throw new ManifestError(
-          `Channel '${channelId}' already exists in base specification`,
-          'Channel names must be unique across all merged specifications'
-        );
+  private mergeManifests(base: Manifest, additional: Manifest): void {
+    // Merge requests
+    if (additional.requests) {
+      if (!base.requests) {
+        base.requests = {};
       }
-      base.channels[channelId] = channel;
+      for (const [requestName, request] of Object.entries(additional.requests)) {
+        if (base.requests[requestName]) {
+          throw new ManifestError(
+            `Request '${requestName}' already exists in base manifest`,
+            'Request names must be unique across all merged manifests'
+          );
+        }
+        base.requests[requestName] = request;
+      }
     }
 
     // Merge models
@@ -404,8 +373,8 @@ export class ManifestParser {
       for (const [modelName, model] of Object.entries(additional.models)) {
         if (base.models[modelName]) {
           throw new ManifestError(
-            `Model '${modelName}' already exists in base specification`,
-            'Model names must be unique across all merged specifications'
+            `Model '${modelName}' already exists in base manifest`,
+            'Model names must be unique across all merged manifests'
           );
         }
         base.models[modelName] = model;
@@ -415,30 +384,30 @@ export class ManifestParser {
 
   /**
    * Serialize Manifest to JSON string
-   * Useful for converting specifications back to JSON format
+   * Useful for converting manifests back to JSON format
    */
-  public serializeToJSON(spec: Manifest, pretty: boolean = false): string {
+  public serializeToJSON(manifest: Manifest, pretty: boolean = false): string {
     // Validate before serialization
-    ManifestParser.validate(spec);
+    ManifestParser.validate(manifest);
     
     if (pretty) {
-      return JSON.stringify(spec, null, 2);
+      return JSON.stringify(manifest, null, 2);
     } else {
-      return JSON.stringify(spec);
+      return JSON.stringify(manifest);
     }
   }
 
   /**
    * Serialize Manifest to YAML string
-   * Useful for converting specifications back to YAML format
+   * Useful for converting manifests back to YAML format
    */
-  public serializeToYAML(spec: Manifest): string {
+  public serializeToYAML(manifest: Manifest): string {
     // Validate before serialization
-    ManifestParser.validate(spec);
+    ManifestParser.validate(manifest);
     
     // Using stringify from yaml package to serialize
     const yaml = require('yaml');
-    return yaml.stringify(spec);
+    return yaml.stringify(manifest);
   }
 
   // Static Interface Methods (matching Go implementation)
@@ -494,26 +463,26 @@ export class ManifestParser {
   /**
    * Static method for JSON serialization
    */
-  public static serializeToJSON(spec: Manifest, pretty: boolean = false): string {
+  public static serializeToJSON(manifest: Manifest, pretty: boolean = false): string {
     const parser = new ManifestParser();
-    return parser.serializeToJSON(spec, pretty);
+    return parser.serializeToJSON(manifest, pretty);
   }
 
   /**
    * Static method for YAML serialization
    */
-  public static serializeToYAML(spec: Manifest): string {
+  public static serializeToYAML(manifest: Manifest): string {
     const parser = new ManifestParser();
-    return parser.serializeToYAML(spec);
+    return parser.serializeToYAML(manifest);
   }
 
   /**
-   * Static method for specification merging
+   * Static method for manifest merging
    */
-  public static mergeSpecifications(base: Manifest, additional: Manifest): Manifest {
+  public static mergeManifests(base: Manifest, additional: Manifest): Manifest {
     const parser = new ManifestParser();
-    const mergedSpec = { ...base };
-    parser.mergeSpecifications(mergedSpec, additional);
-    return mergedSpec;
+    const mergedManifest = { ...base };
+    parser.mergeManifests(mergedManifest, additional);
+    return mergedManifest;
   }
 }

@@ -72,7 +72,7 @@ This directory contains automatically generated documentation for the Janus.
 - \`index.html\` - Main documentation page (open in browser)
 - \`styles.css\` - Styling for the documentation
 - \`script.js\` - Interactive functionality
-- \`openapi.json\` - OpenAPI/Swagger specification
+- \`openapi.json\` - OpenAPI/Swagger manifest
 - \`swagger.json\` - Alternative OpenManifest
 
 ## Usage
@@ -84,10 +84,10 @@ This directory contains automatically generated documentation for the Janus.
 ## Features
 
 - 📱 **Responsive Design**: Works on desktop and mobile
-- 🔍 **Search Functionality**: Find commands and models quickly
+- 🔍 **Search Functionality**: Find requests and models quickly
 - 📋 **Copy Examples**: Click to copy code examples
 - 🎨 **Professional Styling**: Clean, modern interface
-- 🔗 **Deep Linking**: Direct links to sections and commands
+- 🔗 **Deep Linking**: Direct links to sections and requests
 
 ## Implementation Support
 

@@ -1,17 +1,17 @@
 /**
- * Built-in Command Handler Tests
- * Tests for all built-in commands: ping, echo, get_info, validate, slow_process, spec
+ * Built-in Request Handler Tests
+ * Tests for all built-in requests: ping, echo, get_info, validate, slow_process, manifest
  */
 
-import { JanusCommand } from '../types/protocol';
+import { JanusRequest } from '../types/protocol';
 
-describe('Built-in Command Handlers', () => {
-  // Test helper function to simulate command processing
-  async function simulateBuiltinCommand(command: string, args?: Record<string, any>): Promise<Record<string, any>> {
+describe('Built-in Request Handlers', () => {
+  // Test helper function to simulate request processing
+  async function simulateBuiltinRequest(request: string, args?: Record<string, any>): Promise<Record<string, any>> {
     
     let result: Record<string, any> = {};
     
-    switch (command) {
+    switch (request) {
       case 'ping':
         result.pong = true;
         result.echo = args;
@@ -52,76 +52,76 @@ describe('Built-in Command Handlers', () => {
           result.message = args.message;
         }
         break;
-      case 'spec':
+      case 'manifest':
         // Return Manifest (simplified for testing)
-        result.specification = {
+        result.manifest = {
           version: '1.0.0',
           channels: {},
           models: {}
         };
         break;
       default:
-        throw new Error(`Unknown command: ${command}`);
+        throw new Error(`Unknown request: ${request}`);
     }
     
     return result;
   }
 
-  describe('Ping Command', () => {
+  describe('Ping Request', () => {
     it('should respond with pong and echo args', async () => {
-      const result = await simulateBuiltinCommand('ping', { test: 'data' });
+      const result = await simulateBuiltinRequest('ping', { test: 'data' });
       
       expect(result.pong).toBe(true);
       expect(result.echo).toEqual({ test: 'data' });
     });
 
     it('should respond with pong even without args', async () => {
-      const result = await simulateBuiltinCommand('ping');
+      const result = await simulateBuiltinRequest('ping');
       
       expect(result.pong).toBe(true);
       expect(result.echo).toBeUndefined();
     });
 
     it('should handle null args gracefully', async () => {
-      const result = await simulateBuiltinCommand('ping', null as any);
+      const result = await simulateBuiltinRequest('ping', null as any);
       
       expect(result.pong).toBe(true);
       expect(result.echo).toBeNull();
     });
   });
 
-  describe('Echo Command', () => {
+  describe('Echo Request', () => {
     it('should echo the message parameter', async () => {
-      const testMessage = 'Hello from echo command';
-      const result = await simulateBuiltinCommand('echo', { message: testMessage });
+      const testMessage = 'Hello from echo request';
+      const result = await simulateBuiltinRequest('echo', { message: testMessage });
       
       expect(result.message).toBe(testMessage);
     });
 
     it('should handle missing message parameter', async () => {
-      const result = await simulateBuiltinCommand('echo', {});
+      const result = await simulateBuiltinRequest('echo', {});
       
       expect(result.message).toBeUndefined();
     });
 
     it('should handle complex message objects', async () => {
       const complexMessage = { data: [1, 2, 3], nested: { value: 'test' } };
-      const result = await simulateBuiltinCommand('echo', { message: complexMessage });
+      const result = await simulateBuiltinRequest('echo', { message: complexMessage });
       
       expect(result.message).toEqual(complexMessage);
     });
 
     it('should handle string messages', async () => {
       const stringMessage = 'Simple string message';
-      const result = await simulateBuiltinCommand('echo', { message: stringMessage });
+      const result = await simulateBuiltinRequest('echo', { message: stringMessage });
       
       expect(result.message).toBe(stringMessage);
     });
   });
 
-  describe('Get Info Command', () => {
+  describe('Get Info Request', () => {
     it('should return implementation information', async () => {
-      const result = await simulateBuiltinCommand('get_info');
+      const result = await simulateBuiltinRequest('get_info');
       
       expect(result.implementation).toBe('TypeScript');
       expect(result.version).toBe('1.0.0');
@@ -129,7 +129,7 @@ describe('Built-in Command Handlers', () => {
     });
 
     it('should return info regardless of args', async () => {
-      const result = await simulateBuiltinCommand('get_info', { ignored: 'parameter' });
+      const result = await simulateBuiltinRequest('get_info', { ignored: 'parameter' });
       
       expect(result.implementation).toBe('TypeScript');
       expect(result.version).toBe('1.0.0');
@@ -137,7 +137,7 @@ describe('Built-in Command Handlers', () => {
     });
 
     it('should have consistent structure', async () => {
-      const result = await simulateBuiltinCommand('get_info');
+      const result = await simulateBuiltinRequest('get_info');
       
       expect(typeof result.implementation).toBe('string');
       expect(typeof result.version).toBe('string');
@@ -146,10 +146,10 @@ describe('Built-in Command Handlers', () => {
     });
   });
 
-  describe('Validate Command', () => {
+  describe('Validate Request', () => {
     it('should validate valid JSON', async () => {
       const validJson = '{"test": "data", "number": 123}';
-      const result = await simulateBuiltinCommand('validate', { message: validJson });
+      const result = await simulateBuiltinRequest('validate', { message: validJson });
       
       expect(result.valid).toBe(true);
       expect(result.data).toEqual({ test: 'data', number: 123 });
@@ -158,7 +158,7 @@ describe('Built-in Command Handlers', () => {
 
     it('should reject invalid JSON', async () => {
       const invalidJson = '{"invalid": json}';
-      const result = await simulateBuiltinCommand('validate', { message: invalidJson });
+      const result = await simulateBuiltinRequest('validate', { message: invalidJson });
       
       expect(result.valid).toBe(false);
       expect(result.error).toBe('Invalid JSON format');
@@ -167,14 +167,14 @@ describe('Built-in Command Handlers', () => {
     });
 
     it('should handle missing message parameter', async () => {
-      const result = await simulateBuiltinCommand('validate', {});
+      const result = await simulateBuiltinRequest('validate', {});
       
       expect(result.valid).toBe(false);
       expect(result.error).toBe('No message provided for validation');
     });
 
     it('should handle non-string message parameter', async () => {
-      const result = await simulateBuiltinCommand('validate', { message: 123 });
+      const result = await simulateBuiltinRequest('validate', { message: 123 });
       
       expect(result.valid).toBe(false);
       expect(result.error).toBe('No message provided for validation');
@@ -182,7 +182,7 @@ describe('Built-in Command Handlers', () => {
 
     it('should validate complex JSON structures', async () => {
       const complexJson = '{"array": [1, 2, 3], "nested": {"deep": {"value": true}}}';
-      const result = await simulateBuiltinCommand('validate', { message: complexJson });
+      const result = await simulateBuiltinRequest('validate', { message: complexJson });
       
       expect(result.valid).toBe(true);
       expect(result.data).toEqual({
@@ -192,10 +192,10 @@ describe('Built-in Command Handlers', () => {
     });
   });
 
-  describe('Slow Process Command', () => {
+  describe('Slow Process Request', () => {
     it('should simulate processing delay', async () => {
       const startTime = Date.now();
-      const result = await simulateBuiltinCommand('slow_process', { message: 'test' });
+      const result = await simulateBuiltinRequest('slow_process', { message: 'test' });
       const endTime = Date.now();
       
       expect(result.processed).toBe(true);
@@ -205,7 +205,7 @@ describe('Built-in Command Handlers', () => {
     });
 
     it('should handle processing without message', async () => {
-      const result = await simulateBuiltinCommand('slow_process');
+      const result = await simulateBuiltinRequest('slow_process');
       
       expect(result.processed).toBe(true);
       expect(result.delay).toBe('100ms');
@@ -214,107 +214,107 @@ describe('Built-in Command Handlers', () => {
 
     it('should preserve message content through delay', async () => {
       const complexMessage = { data: 'important', priority: 'high' };
-      const result = await simulateBuiltinCommand('slow_process', { message: complexMessage });
+      const result = await simulateBuiltinRequest('slow_process', { message: complexMessage });
       
       expect(result.processed).toBe(true);
       expect(result.message).toEqual(complexMessage);
     });
   });
 
-  describe('Spec Command', () => {
+  describe('Manifest Request', () => {
     it('should return Manifest', async () => {
-      const result = await simulateBuiltinCommand('spec');
+      const result = await simulateBuiltinRequest('manifest');
       
-      expect(result.specification).toBeDefined();
-      expect(result.specification.version).toBe('1.0.0');
-      expect(result.specification.channels).toBeDefined();
-      expect(result.specification.models).toBeDefined();
+      expect(result.manifest).toBeDefined();
+      expect(result.manifest.version).toBe('1.0.0');
+      expect(result.manifest.channels).toBeDefined();
+      expect(result.manifest.models).toBeDefined();
     });
 
-    it('should return consistent specification structure', async () => {
-      const result = await simulateBuiltinCommand('spec');
+    it('should return consistent manifest structure', async () => {
+      const result = await simulateBuiltinRequest('manifest');
       
-      expect(typeof result.specification).toBe('object');
-      expect(typeof result.specification.version).toBe('string');
-      expect(typeof result.specification.channels).toBe('object');
-      expect(typeof result.specification.models).toBe('object');
+      expect(typeof result.manifest).toBe('object');
+      expect(typeof result.manifest.version).toBe('string');
+      expect(typeof result.manifest.channels).toBe('object');
+      expect(typeof result.manifest.models).toBe('object');
     });
   });
 
-  describe('Reserved Command Validation', () => {
-    it('should recognize all built-in commands', () => {
-      const builtinCommands = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'spec'];
+  describe('Reserved Request Validation', () => {
+    it('should recognize all built-in requests', () => {
+      const builtinRequests = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'manifest'];
       
-      builtinCommands.forEach(command => {
+      builtinRequests.forEach(request => {
         expect(() => {
-          // This would fail if command is not recognized
-          simulateBuiltinCommand(command);
+          // This would fail if request is not recognized
+          simulateBuiltinRequest(request);
         }).not.toThrow();
       });
     });
 
-    it('should reject unknown commands', async () => {
-      await expect(simulateBuiltinCommand('unknown_command')).rejects.toThrow('Unknown command: unknown_command');
+    it('should reject unknown requests', async () => {
+      await expect(simulateBuiltinRequest('unknown_request')).rejects.toThrow('Unknown request: unknown_request');
     });
 
     it('should reject Manifest defining built-ins', () => {
-      const reservedCommands = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'spec'];
+      const reservedRequests = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'manifest'];
       
       // Simulate Manifest validation (this would be done by the parser)
       const manifest = {
         channels: {
           test: {
-            commands: {
-              ping: { description: 'Should be rejected' }, // Reserved command
+            requests: {
+              ping: { description: 'Should be rejected' }, // Reserved request
               custom: { description: 'Should be allowed' }
             }
           }
         }
       };
       
-      const hasReservedCommands = Object.values(manifest.channels).some(channel =>
-        Object.keys(channel.commands).some(cmd => reservedCommands.includes(cmd))
+      const hasReservedRequests = Object.values(manifest.channels).some(channel =>
+        Object.keys(channel.requests).some(cmd => reservedRequests.includes(cmd))
       );
       
-      expect(hasReservedCommands).toBe(true); // This spec should be rejected
+      expect(hasReservedRequests).toBe(true); // This manifest should be rejected
     });
   });
 
-  describe('Command Argument Population', () => {
-    it('should populate arguments based on command type', () => {
+  describe('Request Argument Population', () => {
+    it('should populate arguments based on request type', () => {
       const testCases = [
-        { command: 'ping', expectedArgs: { test: 'data' } },
-        { command: 'echo', expectedArgs: { message: 'test' } },
-        { command: 'get_info', expectedArgs: {} },
-        { command: 'validate', expectedArgs: { message: '{"test": true}' } },
-        { command: 'slow_process', expectedArgs: { message: 'processing' } },
-        { command: 'spec', expectedArgs: {} }
+        { request: 'ping', expectedArgs: { test: 'data' } },
+        { request: 'echo', expectedArgs: { message: 'test' } },
+        { request: 'get_info', expectedArgs: {} },
+        { request: 'validate', expectedArgs: { message: '{"test": true}' } },
+        { request: 'slow_process', expectedArgs: { message: 'processing' } },
+        { request: 'manifest', expectedArgs: {} }
       ];
       
-      testCases.forEach(({ command, expectedArgs }) => {
-        // Verify that each command can accept its expected argument structure
+      testCases.forEach(({ request, expectedArgs }) => {
+        // Verify that each request can accept its expected argument structure
         expect(() => {
-          const cmd: JanusCommand = {
+          const cmd: JanusRequest = {
             id: 'test',
-            command,
+            request,
             channelId: 'test',
             args: expectedArgs,
             timestamp: Date.now()
           };
           
-          // Basic validation that command structure is correct
-          expect(cmd.command).toBe(command);
+          // Basic validation that request structure is correct
+          expect(cmd.request).toBe(request);
           expect(cmd.args).toEqual(expectedArgs);
         }).not.toThrow();
       });
     });
 
     it('should handle missing args gracefully', async () => {
-      // All built-in commands should handle missing/undefined args
-      const commands = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'spec'];
+      // All built-in requests should handle missing/undefined args
+      const requests = ['ping', 'echo', 'get_info', 'validate', 'slow_process', 'manifest'];
       
-      for (const command of commands) {
-        const result = await simulateBuiltinCommand(command, undefined);
+      for (const request of requests) {
+        const result = await simulateBuiltinRequest(request, undefined);
         expect(result).toBeDefined();
       }
     });

@@ -70,7 +70,7 @@ describe('Network Failure Handling', () => {
       }
     });
 
-    it('should respect configured connection timeout values', async () => {
+    it('should remanifestt configured connection timeout values', async () => {
       const shortTimeout = 50;
       const client = new JanusClient({ 
         socketPath: '/tmp/timeout_test_socket',
@@ -324,7 +324,7 @@ describe('Network Failure Handling', () => {
       });
     });
 
-    it('should provide specific error messages for different malformations', () => {
+    it('should provide manifestific error messages for different malformations', () => {
       const testCases = [
         { path: '/tmp/socket\x00null', expectedError: 'null byte' },
         { path: '/tmp/socket/../traversal', expectedError: 'traversal' },

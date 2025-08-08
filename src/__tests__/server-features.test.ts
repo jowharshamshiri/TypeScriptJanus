@@ -9,7 +9,7 @@ import * as unixDgram from 'unix-dgram';
 // import * as dgram from 'dgram'; // Not needed, using unix-dgram instead
 import { JanusServer } from '../server/janus-server';
 
-import { JanusCommand, JanusResponse } from '../types/protocol';
+import { JanusRequest, JanusResponse } from '../types/protocol';
 
 describe('Server Features', () => {
   let tempDir: string;
@@ -51,24 +51,24 @@ describe('Server Features', () => {
     return { server, socketPath };
   }
 
-  // Helper function to send command and wait for response (SOCK_DGRAM)
-  async function sendCommandAndWait(
+  // Helper function to send request and wait for response (SOCK_DGRAM)
+  async function sendRequestAndWait(
     socketPath: string, 
-    command: JanusCommand, 
+    request: JanusRequest, 
     timeout: number = 5000
   ): Promise<JanusResponse> {
     return new Promise((resolve, reject) => {
-      console.log('🔍 sendCommandAndWait: Starting...');
+      console.log('🔍 sendRequestAndWait: Starting...');
       
       // Create response socket with unique timestamp and higher precision to avoid collisions
       const timestamp = Date.now();
       const nanoSuffix = process.hrtime.bigint().toString(36);
       const randomSuffix = Math.random().toString(36).substring(2);
-      const responseSocketPath = path.join(tempDir, `response-${command.id}-${timestamp}-${nanoSuffix}-${randomSuffix}.sock`);
-      console.log('🔍 sendCommandAndWait: Response socket path:', responseSocketPath);
+      const responseSocketPath = path.join(tempDir, `response-${request.id}-${timestamp}-${nanoSuffix}-${randomSuffix}.sock`);
+      console.log('🔍 sendRequestAndWait: Response socket path:', responseSocketPath);
       
       const responseSocket = unixDgram.createSocket('unix_dgram');
-      console.log('🔍 sendCommandAndWait: Response socket created');
+      console.log('🔍 sendRequestAndWait: Response socket created');
       
       let responseReceived = false;
       let socketClosed = false;
@@ -76,7 +76,7 @@ describe('Server Features', () => {
       const cleanup = () => {
         return new Promise<void>((cleanupResolve) => {
           if (!socketClosed) {
-            console.log('🔍 sendCommandAndWait: Cleaning up...');
+            console.log('🔍 sendRequestAndWait: Cleaning up...');
             socketClosed = true;
             
             // Give socket time to close properly before cleanup
@@ -84,7 +84,7 @@ describe('Server Features', () => {
               try {
                 responseSocket.close();
               } catch (e) {
-                console.log('🔍 sendCommandAndWait: Socket close error (ignored):', e);
+                console.log('🔍 sendRequestAndWait: Socket close error (ignored):', e);
               }
               
               // Additional delay to ensure socket is fully cleaned up by OS
@@ -94,7 +94,7 @@ describe('Server Features', () => {
                     fs.unlinkSync(responseSocketPath); 
                   }
                 } catch (e) {
-                  console.log('🔍 sendCommandAndWait: File cleanup error (ignored):', e);
+                  console.log('🔍 sendRequestAndWait: File cleanup error (ignored):', e);
                 }
                 cleanupResolve();
               }, 50);
@@ -107,23 +107,23 @@ describe('Server Features', () => {
       
       const timer = setTimeout(() => {
         if (!responseReceived) {
-          console.log('🔍 sendCommandAndWait: Timeout reached');
+          console.log('🔍 sendRequestAndWait: Timeout reached');
           cleanup().then(() => reject(new Error('Timeout waiting for response')));
         }
       }, timeout);
 
-      console.log('🔍 sendCommandAndWait: Binding response socket...');
+      console.log('🔍 sendRequestAndWait: Binding response socket...');
       try {
         responseSocket.bind(responseSocketPath);
-        console.log('🔍 sendCommandAndWait: Response socket bound successfully');
+        console.log('🔍 sendRequestAndWait: Response socket bound successfully');
       } catch (error) {
-        console.log('🔍 sendCommandAndWait: Response socket bind error:', error);
+        console.log('🔍 sendRequestAndWait: Response socket bind error:', error);
         cleanup().then(() => reject(error));
         return;
       }
       
       responseSocket.on('message', (data) => {
-        console.log('🔍 sendCommandAndWait: Message received:', data.toString());
+        console.log('🔍 sendRequestAndWait: Message received:', data.toString());
         responseReceived = true;
         clearTimeout(timer);
         
@@ -138,26 +138,26 @@ describe('Server Features', () => {
       });
 
       responseSocket.on('error', (error) => {
-        console.log('🔍 sendCommandAndWait: Response socket error:', error);
+        console.log('🔍 sendRequestAndWait: Response socket error:', error);
         if (!responseReceived) {
           cleanup().then(() => reject(error));
         }
       });
 
-      // Create command with response socket path
-      const commandWithResponse: JanusCommand = {
-        ...command,
+      // Create request with response socket path
+      const requestWithResponse: JanusRequest = {
+        ...request,
         reply_to: responseSocketPath
       };
 
-      console.log('🔍 sendCommandAndWait: Sending command:', JSON.stringify(commandWithResponse));
+      console.log('🔍 sendRequestAndWait: Sending request:', JSON.stringify(requestWithResponse));
 
-      // Send command via SOCK_DGRAM
+      // Send request via SOCK_DGRAM
       const clientSocket = unixDgram.createSocket('unix_dgram');
-      const commandData = Buffer.from(JSON.stringify(commandWithResponse));
+      const requestData = Buffer.from(JSON.stringify(requestWithResponse));
       
-      clientSocket.send(commandData, 0, commandData.length, socketPath, (error) => {
-        console.log('🔍 sendCommandAndWait: Send callback called, error:', error);
+      clientSocket.send(requestData, 0, requestData.length, socketPath, (error) => {
+        console.log('🔍 sendRequestAndWait: Send callback called, error:', error);
         clientSocket.close();
         if (error) {
           responseReceived = true;
@@ -165,18 +165,18 @@ describe('Server Features', () => {
           cleanup();
           reject(error);
         } else {
-          console.log('🔍 sendCommandAndWait: Command sent successfully, waiting for response...');
+          console.log('🔍 sendRequestAndWait: Request sent successfully, waiting for response...');
         }
       });
     });
   }
 
-  describe('Command Handler Registry', () => {
-    test('should register and execute command handlers', async () => {
+  describe('Request Handler Registry', () => {
+    test('should register and execute request handlers', async () => {
       const { server, socketPath } = createTestServer();
       
       // Register test handler
-      server.registerCommandHandler('test', 'test_command', (_args) => {
+      server.registerRequestHandler('test_request', (_args) => {
         return Promise.resolve({ message: 'test response' });
       });
 
@@ -187,24 +187,24 @@ describe('Server Features', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
-        // Send test command
-        const command: JanusCommand = {
+        // Send test request
+        const request: JanusRequest = {
           id: 'test-001',
-          channelId: 'test',
-          command: 'test_command',
-          timestamp: Date.now() / 1000
+          method: 'test_request',
+          request: 'test_request',
+          timestamp: new Date().toISOString()
         };
 
-        const response = await sendCommandAndWait(socketPath, command);
+        const response = await sendRequestAndWait(socketPath, request);
 
         expect(response.success).toBe(true);
-        expect(response.commandId).toBe('test-001');
+        expect(response.request_id).toBe('test-001');
         expect(response.result).toEqual({ message: 'test response' });
       } finally {
         await server.close();
       }
 
-      console.log('✅ Command handler registry validated');
+      console.log('✅ Request handler registry validated');
     });
   });
 
@@ -222,14 +222,14 @@ describe('Server Features', () => {
         const promises: Promise<JanusResponse>[] = [];
 
         for (let i = 0; i < clientCount; i++) {
-          const command: JanusCommand = {
+          const request: JanusRequest = {
             id: `client-${i}`,
-            channelId: `test-client-${i}`,
-            command: 'ping', // Built-in command
-            timestamp: Date.now() / 1000
+            method: 'ping',
+            request: 'ping', // Built-in request
+            timestamp: new Date().toISOString()
           };
 
-          promises.push(sendCommandAndWait(socketPath, command, 3000));
+          promises.push(sendRequestAndWait(socketPath, request, 3000));
         }
 
         const responses = await Promise.all(promises);
@@ -237,7 +237,7 @@ describe('Server Features', () => {
         expect(responses).toHaveLength(clientCount);
         responses.forEach((response, index) => {
           expect(response.success).toBe(true);
-          expect(response.commandId).toBe(`client-${index}`);
+          expect(response.request_id).toBe(`client-${index}`);
         });
       } finally {
         await server.close();
@@ -255,7 +255,7 @@ describe('Server Features', () => {
       const events: string[] = [];
       
       server.on('listening', () => events.push('listening'));
-      server.on('command', () => events.push('command'));
+      server.on('request', () => events.push('request'));
       server.on('response', () => events.push('response'));
 
       // Start server
@@ -263,22 +263,22 @@ describe('Server Features', () => {
       await new Promise(resolve => setTimeout(resolve, 200));
 
       try {
-        // Send test command to trigger events
-        const command: JanusCommand = {
+        // Send test request to trigger events
+        const request: JanusRequest = {
           id: 'event-test',
-          channelId: 'test',
-          command: 'ping',
-          timestamp: Date.now() / 1000
+          method: 'ping',
+          request: 'ping',
+          timestamp: new Date().toISOString()
         };
 
-        await sendCommandAndWait(socketPath, command);
+        await sendRequestAndWait(socketPath, request);
 
         // Give events time to process
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Verify events were emitted
         expect(events).toContain('listening');
-        expect(events).toContain('command');
+        expect(events).toContain('request');
         expect(events).toContain('response');
       } finally {
         await server.close();
@@ -313,15 +313,15 @@ describe('Server Features', () => {
   });
 
   describe('Connection Processing Loop', () => {
-    test('should process multiple commands sequentially', async () => {
+    test('should process multiple requests sequentially', async () => {
       const { server, socketPath } = createTestServer();
 
-      // Track processed commands
-      const processedCommands: string[] = [];
+      // Track processed requests
+      const processedRequests: string[] = [];
 
-      // Register handler that tracks commands
-      server.registerCommandHandler('test', 'track_test', (args) => {
-        processedCommands.push(args.commandId || 'unknown');
+      // Register handler that tracks requests
+      server.registerRequestHandler('track_test', (args) => {
+        processedRequests.push(args.requestId || 'unknown');
         return Promise.resolve({ tracked: true });
       });
 
@@ -330,28 +330,28 @@ describe('Server Features', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
-        // Send multiple commands
-        const commandIds = ['cmd1', 'cmd2', 'cmd3'];
+        // Send multiple requests
+        const requestIds = ['cmd1', 'cmd2', 'cmd3'];
         const promises: Promise<JanusResponse>[] = [];
 
-        for (const cmdId of commandIds) {
-          const command: JanusCommand = {
+        for (const cmdId of requestIds) {
+          const request: JanusRequest = {
             id: cmdId,
-            channelId: 'test',
-            command: 'track_test',
-            timestamp: Date.now() / 1000,
-            args: { commandId: cmdId } // Pass command ID in args so handler can access it
+            method: 'track_test',
+            request: 'track_test',
+            timestamp: new Date().toISOString(),
+            args: { requestId: cmdId } // Pass request ID in args so handler can access it
           };
 
-          promises.push(sendCommandAndWait(socketPath, command));
+          promises.push(sendRequestAndWait(socketPath, request));
         }
 
         await Promise.all(promises);
 
-        // Verify all commands were processed
-        expect(processedCommands).toHaveLength(commandIds.length);
-        commandIds.forEach(expectedId => {
-          expect(processedCommands).toContain(expectedId);
+        // Verify all requests were processed
+        expect(processedRequests).toHaveLength(requestIds.length);
+        requestIds.forEach(expectedId => {
+          expect(processedRequests).toContain(expectedId);
         });
       } finally {
         await server.close();
@@ -370,20 +370,20 @@ describe('Server Features', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
-        // Send command that doesn't have a handler
-        const command: JanusCommand = {
+        // Send request that doesn't have a handler
+        const request: JanusRequest = {
           id: 'error-test',
-          channelId: 'test',
-          command: 'nonexistent_command',
-          timestamp: Date.now() / 1000
+          method: 'nonexistent_request',
+          request: 'nonexistent_request',
+          timestamp: new Date().toISOString()
         };
 
-        const response = await sendCommandAndWait(socketPath, command);
+        const response = await sendRequestAndWait(socketPath, request);
 
         // Verify error response structure
         expect(response.success).toBe(false);
         expect(response.error).toBeDefined();
-        expect(response.commandId).toBe('error-test');
+        expect(response.request_id).toBe('error-test');
       } finally {
         await server.close();
       }
@@ -393,7 +393,7 @@ describe('Server Features', () => {
   });
 
   describe('Client Activity Tracking', () => {
-    test('should track client activity through command processing', async () => {
+    test('should track client activity through request processing', async () => {
       const { server, socketPath } = createTestServer();
 
       // Start server
@@ -409,37 +409,37 @@ describe('Server Features', () => {
           maxMessageSize: 64 * 1024
         });
 
-        // Send multiple commands from same "client" (same channel)
+        // Send multiple requests from same "client" (same channel)
         for (let i = 0; i < 3; i++) {
-          const command = {
+          const request = {
             id: `activity-test-${i}`,
-            channelId: 'test-client', // Same channel = same client
-            command: 'ping',
-            timestamp: Date.now()
+            method: 'ping',
+            request: 'ping',
+            timestamp: new Date().toISOString()
           };
 
-          await client.sendCommand(command);
+          await client.sendRequest(request);
 
-          // Small delay between commands
+          // Small delay between requests
           await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        // Verify server tracked client activity (through successful command processing)
+        // Verify server tracked client activity (through successful request processing)
         // Client count tracking removed - stateless SOCK_DGRAM
       } finally {
         await server.close();
       }
 
-      console.log('✅ Client activity tracking validated through command processing');
+      console.log('✅ Client activity tracking validated through request processing');
     });
   });
 
-  describe('Command Execution with Timeout', () => {
-    test('should handle command timeouts properly', async () => {
+  describe('Request Execution with Timeout', () => {
+    test('should handle request timeouts properly', async () => {
       const { server, socketPath } = createTestServer();
 
       // Register slow handler that might timeout
-      server.registerCommandHandler('test', 'slow_command', async (_args) => {
+      server.registerRequestHandler('slow_request', async (_args) => {
         await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
         return { should: 'not reach here' };
       });
@@ -449,19 +449,19 @@ describe('Server Features', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
-        // Send slow command with short timeout
-        const command: JanusCommand = {
+        // Send slow request with short timeout
+        const request: JanusRequest = {
           id: 'timeout-test',
-          channelId: 'test',
-          command: 'slow_command',
+          method: 'slow_request',
+          request: 'slow_request',
           timeout: 1, // 1 second timeout
-          timestamp: Date.now() / 1000
+          timestamp: new Date().toISOString()
         };
 
         const startTime = Date.now();
         
         try {
-          const response = await sendCommandAndWait(socketPath, command, 3000);
+          const response = await sendRequestAndWait(socketPath, request, 3000);
           const duration = Date.now() - startTime;
 
           // Verify response came back reasonably quickly
@@ -472,13 +472,13 @@ describe('Server Features', () => {
         } catch (error) {
           const duration = Date.now() - startTime;
           expect(duration).toBeLessThan(3000);
-          console.log('Command timed out as expected');
+          console.log('Request timed out as expected');
         }
       } finally {
         await server.close();
       }
 
-      console.log('✅ Command execution with timeout validated');
+      console.log('✅ Request execution with timeout validated');
     }, 15000);
   });
 
@@ -497,15 +497,15 @@ describe('Server Features', () => {
       await server.listen();
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Verify server is working (can send command)
-      const command: JanusCommand = {
+      // Verify server is working (can send request)
+      const request: JanusRequest = {
         id: 'cleanup-test',
-        channelId: 'test',
-        command: 'ping',
-        timestamp: Date.now() / 1000
+        method: 'ping',
+        request: 'ping',
+        timestamp: new Date().toISOString()
       };
 
-      const response = await sendCommandAndWait(socketPath, command);
+      const response = await sendRequestAndWait(socketPath, request);
       expect(response.success).toBe(true);
 
       // Stop server

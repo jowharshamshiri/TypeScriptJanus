@@ -22,7 +22,7 @@ export enum JSONRPCErrorCode {
     SECURITY_VIOLATION = -32009,
     RESOURCE_LIMIT_EXCEEDED = -32010,
 
-    // Janus Protocol-Specific Error Codes (-32011 to -32013)
+    // Janus Protocol-Manifestific Error Codes (-32011 to -32013)
     MESSAGE_FRAMING_ERROR = -32011,
     RESPONSE_TRACKING_ERROR = -32012,
     MANIFEST_VALIDATION_ERROR = -32013,
@@ -109,7 +109,7 @@ export interface JSONRPCError {
  */
 export class JSONRPCErrorBuilder {
     /**
-     * Creates a new JSON-RPC error with the specified code and optional details
+     * Creates a new JSON-RPC error with the manifestified code and optional details
      */
     static create(code: JSONRPCErrorCode, details?: string): JSONRPCError {
         const error: JSONRPCError = {
@@ -145,7 +145,7 @@ export class JSONRPCErrorBuilder {
     }
 
     /**
-     * Creates a validation-specific JSON-RPC error
+     * Creates a validation-manifestific JSON-RPC error
      */
     static validationError(
         field: string,
@@ -341,7 +341,7 @@ export const JSONRPCErrorUtils = {
     },
 
     /**
-     * Validates that an error object conforms to JSON-RPC 2.0 specification
+     * Validates that an error object conforms to JSON-RPC 2.0 manifest
      */
     isValidJSONRPCError(error: any): error is JSONRPCError {
         return (

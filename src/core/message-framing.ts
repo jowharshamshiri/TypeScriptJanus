@@ -3,7 +3,7 @@
  * Implements 4-byte big-endian length prefix framing
  */
 
-import { SocketMessage, JanusCommand, JanusResponse } from '../types/protocol';
+import { SocketMessage, JanusRequest, JanusResponse } from '../types/protocol';
 import { JSONRPCErrorBuilder, JSONRPCErrorCode, JSONRPCErrorClass } from '../types/jsonrpc-error';
 
 export class MessageFraming {
@@ -13,10 +13,10 @@ export class MessageFraming {
   /**
    * Encode a message with 4-byte big-endian length prefix
    */
-  static encodeMessage(message: JanusCommand | JanusResponse): Buffer {
+  static encodeMessage(message: JanusRequest | JanusResponse): Buffer {
     try {
       // Create message envelope
-      const messageType = 'id' in message ? 'command' : 'response';
+      const messageType = 'id' in message ? 'request' : 'response';
       const jsonPayload = JSON.stringify(message);
       const payloadBuffer = Buffer.from(jsonPayload, 'utf8');
       
@@ -57,7 +57,7 @@ export class MessageFraming {
   /**
    * Decode a message from buffer with length prefix
    */
-  static decodeMessage(buffer: Buffer): { message: JanusCommand | JanusResponse; remainingBuffer: Buffer } {
+  static decodeMessage(buffer: Buffer): { message: JanusRequest | JanusResponse; remainingBuffer: Buffer } {
     try {
       // Check if we have at least the length prefix
       if (buffer.length < this.LENGTH_PREFIX_SIZE) {
@@ -126,7 +126,7 @@ export class MessageFraming {
         ));
       }
       
-      if (envelope.type !== 'command' && envelope.type !== 'response') {
+      if (envelope.type !== 'request' && envelope.type !== 'response') {
         throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
           JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
           `Invalid message type: ${envelope.type}`
@@ -146,7 +146,7 @@ export class MessageFraming {
       
       // Parse payload JSON
       const payloadJson = payloadBuffer.toString('utf8');
-      let message: JanusCommand | JanusResponse;
+      let message: JanusRequest | JanusResponse;
       
       try {
         message = JSON.parse(payloadJson);
@@ -158,8 +158,8 @@ export class MessageFraming {
       }
       
       // Validate message structure based on type
-      if (envelope.type === 'command') {
-        this.validateCommandStructure(message);
+      if (envelope.type === 'request') {
+        this.validateRequestStructure(message);
       } else {
         this.validateResponseStructure(message);
       }
@@ -179,8 +179,8 @@ export class MessageFraming {
   /**
    * Extract complete messages from a buffer, handling partial messages
    */
-  static extractMessages(buffer: Buffer): { messages: (JanusCommand | JanusResponse)[]; remainingBuffer: Buffer } {
-    const messages: (JanusCommand | JanusResponse)[] = [];
+  static extractMessages(buffer: Buffer): { messages: (JanusRequest | JanusResponse)[]; remainingBuffer: Buffer } {
+    const messages: (JanusRequest | JanusResponse)[] = [];
     let currentBuffer = buffer;
     
     while (currentBuffer.length > 0) {
@@ -207,51 +207,51 @@ export class MessageFraming {
   /**
    * Calculate the total size needed for a message when framed
    */
-  static calculateFramedSize(message: JanusCommand | JanusResponse): number {
+  static calculateFramedSize(message: JanusRequest | JanusResponse): number {
     const encoded = this.encodeMessage(message);
     return encoded.length;
   }
 
   /**
-   * Validate command structure
+   * Validate request structure
    */
-  private static validateCommandStructure(message: any): asserts message is JanusCommand {
+  private static validateRequestStructure(message: any): asserts message is JanusRequest {
     if (!message || typeof message !== 'object') {
       throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
-        'Command must be an object'
+        'Request must be an object'
       ));
     }
     
-    const requiredStringFields = ['id', 'channelId', 'command'];
+    const requiredStringFields = ['id', 'method', 'request'];
     for (const field of requiredStringFields) {
       if (!(field in message) || typeof message[field] !== 'string') {
         throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
           JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
-          `Command missing required string field: ${field}`
+          `Request missing required string field: ${field}`
         ));
       }
     }
     
-    // Validate timestamp as number (Unix timestamp)
-    if (!('timestamp' in message) || typeof message.timestamp !== 'number') {
+    // Validate timestamp as string (RFC 3339 format per PRIME DIRECTIVE)
+    if (!('timestamp' in message) || typeof message.timestamp !== 'string') {
       throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
-        'Command missing required number field: timestamp'
+        'Request missing required string field: timestamp'
       ));
     }
     
     if (message.args !== undefined && (typeof message.args !== 'object' || message.args === null)) {
       throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
-        'Command args must be an object'
+        'Request args must be an object'
       ));
     }
     
     if (message.timeout !== undefined && typeof message.timeout !== 'number') {
       throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
-        'Command timeout must be a number'
+        'Request timeout must be a number'
       ));
     }
   }
@@ -267,7 +267,8 @@ export class MessageFraming {
       ));
     }
     
-    const requiredFields = ['commandId', 'channelId', 'success', 'timestamp'];
+    // PRIME DIRECTIVE: Response fields are request_id, id, success, result, error, timestamp
+    const requiredFields = ['request_id', 'id', 'success', 'timestamp'];
     for (const field of requiredFields) {
       if (!(field in message)) {
         throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
@@ -277,21 +278,17 @@ export class MessageFraming {
       }
     }
     
-    if (typeof message.commandId !== 'string' || typeof message.channelId !== 'string' ||
-        typeof message.success !== 'boolean' || typeof message.timestamp !== 'number') {
+    // Validate field types per PRIME DIRECTIVE
+    if (typeof message.request_id !== 'string' || typeof message.id !== 'string' ||
+        typeof message.success !== 'boolean' || typeof message.timestamp !== 'string') {
       throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
-        'Response field types invalid'
+        'Response field types invalid: request_id and id must be strings, success must be boolean, timestamp must be string'
       ));
     }
     
-    if (message.result !== undefined && (typeof message.result !== 'object' || message.result === null)) {
-      throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
-        JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
-        'Response result must be an object'
-      ));
-    }
-    
+    // Result can be any type (not just object)
+    // Error must be a JSONRPC error object if present
     if (message.error !== undefined && (typeof message.error !== 'object' || message.error === null)) {
       throw new JSONRPCErrorClass(JSONRPCErrorBuilder.create(
         JSONRPCErrorCode.MESSAGE_FRAMING_ERROR,
@@ -303,7 +300,7 @@ export class MessageFraming {
   /**
    * Create a direct JSON message for simple cases (without envelope)
    */
-  static encodeDirectMessage(message: JanusCommand | JanusResponse): Buffer {
+  static encodeDirectMessage(message: JanusRequest | JanusResponse): Buffer {
     try {
       const jsonPayload = JSON.stringify(message);
       const messageBuffer = Buffer.from(jsonPayload, 'utf8');
@@ -335,7 +332,7 @@ export class MessageFraming {
   /**
    * Decode a direct JSON message (without envelope)
    */
-  static decodeDirectMessage(buffer: Buffer): { message: JanusCommand | JanusResponse; remainingBuffer: Buffer } {
+  static decodeDirectMessage(buffer: Buffer): { message: JanusRequest | JanusResponse; remainingBuffer: Buffer } {
     try {
       // Check length prefix
       if (buffer.length < this.LENGTH_PREFIX_SIZE) {

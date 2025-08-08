@@ -6,14 +6,13 @@ describe('Automatic ID Management Tests', () => {
   describe('RequestHandle Creation', () => {
     test('F0194: Request ID Assignment and F0196: RequestHandle Structure', () => {
       const internalID = 'test-uuid-12345';
-      const command = 'test_command';
+      const request = 'test_request';
       const channel = 'test_channel';
       
-      const handle = new RequestHandle(internalID, command, channel);
+      const handle = new RequestHandle(internalID, request);
       
       // Verify handle properties
-      expect(handle.getCommand()).toBe(command);
-      expect(handle.getChannel()).toBe(channel);
+      expect(handle.getRequest()).toBe(request);
       expect(handle.getInternalID()).toBe(internalID);
       expect(handle.isCancelled()).toBe(false);
       
@@ -26,7 +25,7 @@ describe('Automatic ID Management Tests', () => {
 
   describe('RequestHandle Cancellation', () => {
     test('F0204: Request Cancellation and F0212: Request Cleanup', () => {
-      const handle = new RequestHandle('test-id', 'test_command', 'test_channel');
+      const handle = new RequestHandle('test-id', 'test_request');
       
       expect(handle.isCancelled()).toBe(false);
       
@@ -38,14 +37,13 @@ describe('Automatic ID Management Tests', () => {
 
   describe('Request Status Tracking', () => {
     test('F0202: Request Status Query', async () => {
-      const client = await JanusClient.create({
+      const client = new JanusClient({
         socketPath: '/tmp/test_socket',
-        channelId: 'test_channel',
         enableValidation: false
       });
       
       // Create a handle
-      const handle = new RequestHandle('test-id', 'test_command', 'test_channel');
+      const handle = new RequestHandle('test-id', 'test_request');
       
       // Test initial status (should be completed since not in registry)
       let status = client.getRequestStatus(handle);
@@ -60,9 +58,8 @@ describe('Automatic ID Management Tests', () => {
 
   describe('Pending Request Management', () => {
     test('F0197: Handle Creation and F0201: Request State Management', async () => {
-      const client = await JanusClient.create({
+      const client = new JanusClient({
         socketPath: '/tmp/test_socket',
-        channelId: 'test_channel',
         enableValidation: false
       });
       
@@ -78,17 +75,16 @@ describe('Automatic ID Management Tests', () => {
 
   describe('Request Lifecycle Management', () => {
     test('F0200: Request State Management and F0211: Handle Cleanup', async () => {
-      const client = await JanusClient.create({
+      const client = new JanusClient({
         socketPath: '/tmp/test_socket',
-        channelId: 'test_channel',
         enableValidation: false
       });
       
       // Create multiple handles to test bulk operations
       const handles = [
-        new RequestHandle('id1', 'cmd1', 'test_channel'),
-        new RequestHandle('id2', 'cmd2', 'test_channel'),
-        new RequestHandle('id3', 'cmd3', 'test_channel')
+        new RequestHandle('id1', 'cmd1'),
+        new RequestHandle('id2', 'cmd2'),
+        new RequestHandle('id3', 'cmd3')
       ];
       
       // Test that handles start as completed (not in registry)
@@ -104,11 +100,10 @@ describe('Automatic ID Management Tests', () => {
 
   describe('ID Visibility Control', () => {
     test('F0195: ID Visibility Control - UUIDs should be hidden from normal API', () => {
-      const handle = new RequestHandle('internal-uuid-12345', 'test_command', 'test_channel');
+      const handle = new RequestHandle('internal-uuid-12345', 'test_request');
       
-      // User should only see command and channel, not internal UUID through normal API
-      expect(handle.getCommand()).toBe('test_command');
-      expect(handle.getChannel()).toBe('test_channel');
+      // User should only see request, not internal UUID through normal API
+      expect(handle.getRequest()).toBe('test_request');
       
       // Internal ID should only be accessible for internal operations
       expect(handle.getInternalID()).toBe('internal-uuid-12345');
@@ -135,15 +130,14 @@ describe('Automatic ID Management Tests', () => {
 
   describe('Concurrent Request Handling', () => {
     test('F0223: Concurrent Request Support', async () => {
-      const client = await JanusClient.create({
+      const client = new JanusClient({
         socketPath: '/tmp/test_socket',
-        channelId: 'test_channel',
         enableValidation: false
       });
       
       // Test concurrent handle creation and management
       const handles = Array.from({ length: 10 }, (_, i) => 
-        new RequestHandle(`concurrent-id-${i}`, `cmd${i}`, 'test_channel')
+        new RequestHandle(`concurrent-id-${i}`, `cmd${i}`)
       );
       
       // Test concurrent status checks
@@ -167,8 +161,7 @@ describe('Automatic ID Management Tests', () => {
       for (let i = 0; i < 1000; i++) {
         const handle = new RequestHandle(
           uuidv4(),
-          'test_command',
-          'test_channel'
+          'test_request'
         );
         
         const id = handle.getInternalID();

@@ -3,7 +3,7 @@
  * Supports direct value responses and native Promise-based async patterns
  */
 
-import { JanusCommand } from '../types/protocol';
+import { JanusRequest } from '../types/protocol';
 import { JSONRPCError, JSONRPCErrorCode, JSONRPCErrorBuilder } from '../types/jsonrpc-error';
 
 /// Result of a handler execution with type safety
@@ -44,36 +44,36 @@ export namespace HandlerResult {
   }
 }
 
-/// Enhanced command handler interface for direct value responses
-export interface CommandHandler<T = any> {
-  handle(command: JanusCommand): Promise<HandlerResult<T>>;
+/// Enhanced request handler interface for direct value responses
+export interface RequestHandler<T = any> {
+  handle(request: JanusRequest): Promise<HandlerResult<T>>;
 }
 
 /// Synchronous handler wrapper for direct value responses
-export class SyncHandler<T> implements CommandHandler<T> {
-  constructor(private handler: (command: JanusCommand) => HandlerResult<T>) {}
+export class SyncHandler<T> implements RequestHandler<T> {
+  constructor(private handler: (request: JanusRequest) => HandlerResult<T>) {}
   
-  async handle(command: JanusCommand): Promise<HandlerResult<T>> {
-    return this.handler(command);
+  async handle(request: JanusRequest): Promise<HandlerResult<T>> {
+    return this.handler(request);
   }
 }
 
 /// Asynchronous handler wrapper for direct value responses
-export class AsyncHandler<T> implements CommandHandler<T> {
-  constructor(private handler: (command: JanusCommand) => Promise<HandlerResult<T>>) {}
+export class AsyncHandler<T> implements RequestHandler<T> {
+  constructor(private handler: (request: JanusRequest) => Promise<HandlerResult<T>>) {}
   
-  async handle(command: JanusCommand): Promise<HandlerResult<T>> {
-    return await this.handler(command);
+  async handle(request: JanusRequest): Promise<HandlerResult<T>> {
+    return await this.handler(request);
   }
 }
 
 // Direct Value Handler Constructors
 
 /// Create a boolean handler
-export function boolHandler(handler: (command: JanusCommand) => boolean | Promise<boolean>): CommandHandler<boolean> {
-  return new AsyncHandler(async (command) => {
+export function boolHandler(handler: (request: JanusRequest) => boolean | Promise<boolean>): RequestHandler<boolean> {
+  return new AsyncHandler(async (request) => {
     try {
-      const result = await handler(command);
+      const result = await handler(request);
       return HandlerResult.success(result);
     } catch (error) {
       return HandlerResult.error(mapErrorToJSONRPC(error));
@@ -82,10 +82,10 @@ export function boolHandler(handler: (command: JanusCommand) => boolean | Promis
 }
 
 /// Create a string handler
-export function stringHandler(handler: (command: JanusCommand) => string | Promise<string>): CommandHandler<string> {
-  return new AsyncHandler(async (command) => {
+export function stringHandler(handler: (request: JanusRequest) => string | Promise<string>): RequestHandler<string> {
+  return new AsyncHandler(async (request) => {
     try {
-      const result = await handler(command);
+      const result = await handler(request);
       return HandlerResult.success(result);
     } catch (error) {
       return HandlerResult.error(mapErrorToJSONRPC(error));
@@ -94,10 +94,10 @@ export function stringHandler(handler: (command: JanusCommand) => string | Promi
 }
 
 /// Create a number handler
-export function numberHandler(handler: (command: JanusCommand) => number | Promise<number>): CommandHandler<number> {
-  return new AsyncHandler(async (command) => {
+export function numberHandler(handler: (request: JanusRequest) => number | Promise<number>): RequestHandler<number> {
+  return new AsyncHandler(async (request) => {
     try {
-      const result = await handler(command);
+      const result = await handler(request);
       return HandlerResult.success(result);
     } catch (error) {
       return HandlerResult.error(mapErrorToJSONRPC(error));
@@ -106,10 +106,10 @@ export function numberHandler(handler: (command: JanusCommand) => number | Promi
 }
 
 /// Create an array handler
-export function arrayHandler<T>(handler: (command: JanusCommand) => T[] | Promise<T[]>): CommandHandler<T[]> {
-  return new AsyncHandler(async (command) => {
+export function arrayHandler<T>(handler: (request: JanusRequest) => T[] | Promise<T[]>): RequestHandler<T[]> {
+  return new AsyncHandler(async (request) => {
     try {
-      const result = await handler(command);
+      const result = await handler(request);
       return HandlerResult.success(result);
     } catch (error) {
       return HandlerResult.error(mapErrorToJSONRPC(error));
@@ -118,10 +118,10 @@ export function arrayHandler<T>(handler: (command: JanusCommand) => T[] | Promis
 }
 
 /// Create an object handler
-export function objectHandler<T extends Record<string, any>>(handler: (command: JanusCommand) => T | Promise<T>): CommandHandler<T> {
-  return new AsyncHandler(async (command) => {
+export function objectHandler<T extends Record<string, any>>(handler: (request: JanusRequest) => T | Promise<T>): RequestHandler<T> {
+  return new AsyncHandler(async (request) => {
     try {
-      const result = await handler(command);
+      const result = await handler(request);
       return HandlerResult.success(result);
     } catch (error) {
       return HandlerResult.error(mapErrorToJSONRPC(error));
@@ -130,10 +130,10 @@ export function objectHandler<T extends Record<string, any>>(handler: (command: 
 }
 
 /// Create a custom type handler
-export function customHandler<T>(handler: (command: JanusCommand) => T | Promise<T>): CommandHandler<T> {
-  return new AsyncHandler(async (command) => {
+export function customHandler<T>(handler: (request: JanusRequest) => T | Promise<T>): RequestHandler<T> {
+  return new AsyncHandler(async (request) => {
     try {
-      const result = await handler(command);
+      const result = await handler(request);
       return HandlerResult.success(result);
     } catch (error) {
       return HandlerResult.error(mapErrorToJSONRPC(error));
@@ -144,44 +144,44 @@ export function customHandler<T>(handler: (command: JanusCommand) => T | Promise
 // Async Handler Constructors (explicit Promise-based)
 
 /// Create an async boolean handler
-export function asyncBoolHandler(handler: (command: JanusCommand) => Promise<boolean>): CommandHandler<boolean> {
-  return new AsyncHandler(async (command) => {
-    return HandlerResult.fromPromise(handler(command));
+export function asyncBoolHandler(handler: (request: JanusRequest) => Promise<boolean>): RequestHandler<boolean> {
+  return new AsyncHandler(async (request) => {
+    return HandlerResult.fromPromise(handler(request));
   });
 }
 
 /// Create an async string handler
-export function asyncStringHandler(handler: (command: JanusCommand) => Promise<string>): CommandHandler<string> {
-  return new AsyncHandler(async (command) => {
-    return HandlerResult.fromPromise(handler(command));
+export function asyncStringHandler(handler: (request: JanusRequest) => Promise<string>): RequestHandler<string> {
+  return new AsyncHandler(async (request) => {
+    return HandlerResult.fromPromise(handler(request));
   });
 }
 
 /// Create an async number handler
-export function asyncNumberHandler(handler: (command: JanusCommand) => Promise<number>): CommandHandler<number> {
-  return new AsyncHandler(async (command) => {
-    return HandlerResult.fromPromise(handler(command));
+export function asyncNumberHandler(handler: (request: JanusRequest) => Promise<number>): RequestHandler<number> {
+  return new AsyncHandler(async (request) => {
+    return HandlerResult.fromPromise(handler(request));
   });
 }
 
 /// Create an async array handler
-export function asyncArrayHandler<T>(handler: (command: JanusCommand) => Promise<T[]>): CommandHandler<T[]> {
-  return new AsyncHandler(async (command) => {
-    return HandlerResult.fromPromise(handler(command));
+export function asyncArrayHandler<T>(handler: (request: JanusRequest) => Promise<T[]>): RequestHandler<T[]> {
+  return new AsyncHandler(async (request) => {
+    return HandlerResult.fromPromise(handler(request));
   });
 }
 
 /// Create an async object handler
-export function asyncObjectHandler<T extends Record<string, any>>(handler: (command: JanusCommand) => Promise<T>): CommandHandler<T> {
-  return new AsyncHandler(async (command) => {
-    return HandlerResult.fromPromise(handler(command));
+export function asyncObjectHandler<T extends Record<string, any>>(handler: (request: JanusRequest) => Promise<T>): RequestHandler<T> {
+  return new AsyncHandler(async (request) => {
+    return HandlerResult.fromPromise(handler(request));
   });
 }
 
 /// Create an async custom type handler
-export function asyncCustomHandler<T>(handler: (command: JanusCommand) => Promise<T>): CommandHandler<T> {
-  return new AsyncHandler(async (command) => {
-    return HandlerResult.fromPromise(handler(command));
+export function asyncCustomHandler<T>(handler: (request: JanusRequest) => Promise<T>): RequestHandler<T> {
+  return new AsyncHandler(async (request) => {
+    return HandlerResult.fromPromise(handler(request));
   });
 }
 
@@ -189,14 +189,14 @@ export function asyncCustomHandler<T>(handler: (command: JanusCommand) => Promis
 
 /// Type-erased handler for registry storage
 export interface BoxedHandler {
-  handleBoxed(command: JanusCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }>;
+  handleBoxed(request: JanusRequest): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }>;
 }
 
 class TypedHandlerWrapper<T> implements BoxedHandler {
-  constructor(private handler: CommandHandler<T>) {}
+  constructor(private handler: RequestHandler<T>) {}
   
-  async handleBoxed(command: JanusCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }> {
-    const result = await this.handler.handle(command);
+  async handleBoxed(request: JanusRequest): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }> {
+    const result = await this.handler.handle(request);
     return result;
   }
 }
@@ -209,37 +209,37 @@ export class HandlerRegistry {
   
   constructor(private maxHandlers: number = 100) {}
   
-  /// Register a handler for a command
-  registerHandler<T>(command: string, handler: CommandHandler<T>): void {
+  /// Register a handler for a request
+  registerHandler<T>(request: string, handler: RequestHandler<T>): void {
     if (this.handlers.size >= this.maxHandlers) {
       throw new Error(`Maximum handlers (${this.maxHandlers}) exceeded`);
     }
     
     const boxed = new TypedHandlerWrapper(handler);
-    this.handlers.set(command, boxed);
+    this.handlers.set(request, boxed);
   }
   
   /// Unregister a handler
-  unregisterHandler(command: string): boolean {
-    return this.handlers.delete(command);
+  unregisterHandler(request: string): boolean {
+    return this.handlers.delete(request);
   }
   
-  /// Execute a handler for a command
-  async executeHandler(command: string, cmd: JanusCommand): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }> {
-    const handler = this.handlers.get(command);
+  /// Execute a handler for a request
+  async executeHandler(request: string, cmd: JanusRequest): Promise<{ success: true; value: any } | { success: false; error: JSONRPCError }> {
+    const handler = this.handlers.get(request);
     if (!handler) {
       return {
         success: false,
-        error: JSONRPCErrorBuilder.create(JSONRPCErrorCode.METHOD_NOT_FOUND, `Command not found: ${command}`)
+        error: JSONRPCErrorBuilder.create(JSONRPCErrorCode.METHOD_NOT_FOUND, `Request not found: ${request}`)
       };
     }
     
     return await handler.handleBoxed(cmd);
   }
   
-  /// Check if a handler exists for a command
-  hasHandler(command: string): boolean {
-    return this.handlers.has(command);
+  /// Check if a handler exists for a request
+  hasHandler(request: string): boolean {
+    return this.handlers.has(request);
   }
   
   /// Get the current number of registered handlers
@@ -269,7 +269,7 @@ function mapErrorToJSONRPC(error: any): JSONRPCError {
   } else if (error instanceof RangeError) {
     code = JSONRPCErrorCode.INVALID_PARAMS;
   } else {
-    // Analyze error message for specific patterns
+    // Analyze error message for manifestific patterns
     const lowerMessage = message.toLowerCase();
     if (lowerMessage.includes('validation')) {
       code = JSONRPCErrorCode.VALIDATION_FAILED;

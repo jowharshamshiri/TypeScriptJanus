@@ -55,8 +55,8 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
     });
   });
 
-  describe('1. Command Handler Registry', () => {
-    it('should register and manage command handlers', async () => {
+  describe('1. Request Handler Registry', () => {
+    it('should register and manage request handlers', async () => {
       let handlerCalled = false;
       const testHandler = async (args: any) => {
         handlerCalled = true;
@@ -64,52 +64,52 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
       };
 
       // Register handler
-      server.registerCommandHandler('test-channel', 'test-command', testHandler);
+      server.registerRequestHandler('test-channel', 'test-request', testHandler);
 
       // Verify handler is registered
       const channelHandlers = server.getChannelHandlers('test-channel');
       expect(channelHandlers).toBeDefined();
-      expect(channelHandlers!.has('test-command')).toBe(true);
+      expect(channelHandlers!.has('test-request')).toBe(true);
 
       // Start server and test handler execution
       await server.listen();
 
-      const command = {
+      const request = {
         id: 'test-1',
-        channelId: 'test-channel',
-        command: 'test-command',
+        method: 'ping',
+        request: 'test-request',
         args: { testParam: 'value' },
-        timestamp: Date.now()
+        timestamp: new Date().toISOString()
       };
 
-      const response = await client.sendCommand(command);
+      const response = await client.sendRequest(request);
       
       expect(handlerCalled).toBe(true);
       expect(response.success).toBe(true);
       expect(response.result?.message).toBe('handler executed');
     });
 
-    it('should unregister command handlers', () => {
+    it('should unregister request handlers', () => {
       const testHandler = async () => ({ result: 'test' });
       
-      server.registerCommandHandler('test-channel', 'test-command', testHandler);
-      expect(server.getChannelHandlers('test-channel')!.has('test-command')).toBe(true);
+      server.registerRequestHandler('test-channel', 'test-request', testHandler);
+      expect(server.getChannelHandlers('test-channel')!.has('test-request')).toBe(true);
       
-      const unregistered = server.unregisterCommandHandler('test-channel', 'test-command');
+      const unregistered = server.unregisterRequestHandler('test-channel', 'test-request');
       expect(unregistered).toBe(true);
-      expect(server.getChannelHandlers('test-channel')!.has('test-command')).toBe(false);
+      expect(server.getChannelHandlers('test-channel')!.has('test-request')).toBe(false);
     });
 
-    it('should validate channel and command names', () => {
+    it('should validate channel and request names', () => {
       const testHandler = async () => ({ result: 'test' });
       
       expect(() => {
-        server.registerCommandHandler('', 'test-command', testHandler);
+        server.registerRequestHandler('', 'test-request', testHandler);
       }).toThrow('Invalid channel ID');
       
       expect(() => {
-        server.registerCommandHandler('test-channel', '', testHandler);
-      }).toThrow('Invalid command name');
+        server.registerRequestHandler('test-channel', '', testHandler);
+      }).toThrow('Invalid request name');
     });
   });
 
@@ -118,28 +118,28 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
       const handler1 = async () => ({ client: 1 });
       const handler2 = async () => ({ client: 2 });
       
-      server.registerCommandHandler('channel1', 'command1', handler1);
-      server.registerCommandHandler('channel2', 'command2', handler2);
+      server.registerRequestHandler('channel1', 'request1', handler1);
+      server.registerRequestHandler('channel2', 'request2', handler2);
       
       await server.listen();
 
-      // Simulate multiple clients by sending different commands
-      const command1 = {
+      // Simulate multiple clients by sending different requests
+      const request1 = {
         id: 'client1-cmd',
-        channelId: 'channel1',
-        command: 'command1',
-        timestamp: Date.now()
+        method: 'request1',
+        request: 'request1',
+        timestamp: new Date().toISOString()
       };
 
-      const command2 = {
+      const request2 = {
         id: 'client2-cmd',
-        channelId: 'channel2',
-        command: 'command2',
-        timestamp: Date.now()
+        method: 'request2',
+        request: 'request2',
+        timestamp: new Date().toISOString()
       };
 
-      await client.sendCommand(command1);
-      await client.sendCommand(command2);
+      await client.sendRequest(request1);
+      await client.sendRequest(request2);
 
       const clientActivity = server.getClientActivity();
       expect(clientActivity.length).toBeGreaterThan(0);
@@ -151,15 +151,15 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
     it('should clean up inactive clients', async () => {
       await server.listen();
       
-      // Send a command to create client activity
+      // Send a request to create client activity
       const testHandler = async () => ({ result: 'test' });
-      server.registerCommandHandler('test', 'ping', testHandler);
+      server.registerRequestHandler('test', 'ping', testHandler);
       
-      await client.sendCommand({
+      await client.sendRequest({
         id: 'test-cmd',
         channelId: 'test',
-        command: 'ping',
-        timestamp: Date.now()
+        request: 'ping',
+        timestamp: new Date().toISOString()
       });
 
       const activityBefore = server.getClientActivity();
@@ -193,31 +193,31 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
       expect(server.isListening()).toBe(true);
     });
 
-    it('should emit command and response events', async () => {
+    it('should emit request and response events', async () => {
       const events: string[] = [];
       
-      server.on('command', () => events.push('command'));
+      server.on('request', () => events.push('request'));
       server.on('response', () => events.push('response'));
       server.on('clientActivity', () => events.push('clientActivity'));
 
       const testHandler = async () => ({ result: 'test' });
-      server.registerCommandHandler('test', 'echo', testHandler);
+      server.registerRequestHandler('test', 'echo', testHandler);
       
       await server.listen();
 
-      await client.sendCommand({
+      await client.sendRequest({
         id: 'event-test',
         channelId: 'test',
-        command: 'echo',
-        timestamp: Date.now()
+        request: 'echo',
+        timestamp: new Date().toISOString()
       });
 
-      expect(events).toContain('command');
+      expect(events).toContain('request');
       expect(events).toContain('response');
       expect(events).toContain('clientActivity');
     });
 
-    it('should emit error events for invalid commands', async () => {
+    it('should emit error events for invalid requests', async () => {
       const errorEvents: Error[] = [];
       
       server.on('error', (error: Error) => {
@@ -226,16 +226,16 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
 
       await server.listen();
 
-      // Send malformed command (this might not trigger error depending on implementation)
+      // Send malformed request (this might not trigger error depending on implementation)
       try {
-        await client.sendCommand({
+        await client.sendRequest({
           id: 'invalid-cmd',
           channelId: 'nonexistent',
-          command: 'nonexistent',
-          timestamp: Date.now()
+          request: 'nonexistent',
+          timestamp: new Date().toISOString()
         });
       } catch (err) {
-        // Expected - command not found
+        // Expected - request not found
         expect(err).toBeDefined();
       }
 
@@ -256,15 +256,15 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
         return { result: 'slow-complete' };
       };
 
-      server.registerCommandHandler('test', 'slow', slowHandler);
+      server.registerRequestHandler('test', 'slow', slowHandler);
       await server.listen();
 
-      // Start a slow command
-      const commandPromise = client.sendCommand({
+      // Start a slow request
+      const requestPromise = client.sendRequest({
         id: 'slow-cmd',
         channelId: 'test',
-        command: 'slow',
-        timestamp: Date.now()
+        request: 'slow',
+        timestamp: new Date().toISOString()
       });
 
       // Wait for handler to start
@@ -275,7 +275,7 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
       const shutdownPromise = server.close();
 
       // Wait for both to complete
-      await Promise.all([commandPromise, shutdownPromise]);
+      await Promise.all([requestPromise, shutdownPromise]);
 
       expect(handlerCompleted).toBe(true);
       expect(server.isListening()).toBe(false);
@@ -291,7 +291,7 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
   });
 
   describe('5. Connection Processing Loop', () => {
-    it('should process multiple concurrent commands', async () => {
+    it('should process multiple concurrent requests', async () => {
       const results: string[] = [];
       
       const handler1 = async () => {
@@ -304,24 +304,24 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
         return { handler: 2 };
       };
 
-      server.registerCommandHandler('channel1', 'cmd1', handler1);
-      server.registerCommandHandler('channel2', 'cmd2', handler2);
+      server.registerRequestHandler('channel1', 'cmd1', handler1);
+      server.registerRequestHandler('channel2', 'cmd2', handler2);
       
       await server.listen();
 
-      // Send multiple commands concurrently
+      // Send multiple requests concurrently
       const promises = [
-        client.sendCommand({
+        client.sendRequest({
           id: 'concurrent-1',
           channelId: 'channel1',
-          command: 'cmd1',
-          timestamp: Date.now()
+          request: 'cmd1',
+          timestamp: new Date().toISOString()
         }),
-        client.sendCommand({
+        client.sendRequest({
           id: 'concurrent-2',
           channelId: 'channel2',
-          command: 'cmd2',
-          timestamp: Date.now()
+          request: 'cmd2',
+          timestamp: new Date().toISOString()
         })
       ];
 
@@ -348,20 +348,20 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
         return { result: 'blocking' };
       };
 
-      limitedServer.registerCommandHandler('test', 'blocking', blockingHandler);
+      limitedServer.registerRequestHandler('test', 'blocking', blockingHandler);
       await limitedServer.listen();
 
       const limitedClient = new JanusClient({
         socketPath: limitedServer['config'].socketPath
       });
 
-      // Send more commands than the limit
+      // Send more requests than the limit
       const promises = Array.from({ length: 3 }, (_, i) =>
-        limitedClient.sendCommand({
+        limitedClient.sendRequest({
           id: `limited-${i}`,
           channelId: 'test',
-          command: 'blocking',
-          timestamp: Date.now()
+          request: 'blocking',
+          timestamp: new Date().toISOString()
         })
       );
 
@@ -378,15 +378,15 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
   });
 
   describe('6. Error Response Generation', () => {
-    it('should generate standard error responses for unknown commands', async () => {
+    it('should generate standard error responses for unknown requests', async () => {
       await server.listen();
 
       try {
-        await client.sendCommand({
+        await client.sendRequest({
           id: 'unknown-cmd',
           channelId: 'unknown-channel',
-          command: 'unknown-command',
-          timestamp: Date.now()
+          request: 'unknown-request',
+          timestamp: new Date().toISOString()
         });
         throw new Error('Should have thrown an error');
       } catch (error: any) {
@@ -401,16 +401,16 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
         return { result: 'should timeout' };
       };
 
-      server.registerCommandHandler('test', 'timeout', timeoutHandler);
+      server.registerRequestHandler('test', 'timeout', timeoutHandler);
       await server.listen();
 
       try {
-        await client.sendCommand({
+        await client.sendRequest({
           id: 'timeout-cmd',
           channelId: 'test',
-          command: 'timeout',
+          request: 'timeout',
           timeout: 0.1, // 100ms timeout
-          timestamp: Date.now()
+          timestamp: new Date().toISOString()
         });
         fail('Should have timed out');
       } catch (error: any) {
@@ -423,15 +423,15 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
         throw new Error('Test error');
       };
 
-      server.registerCommandHandler('test', 'error', errorHandler);
+      server.registerRequestHandler('test', 'error', errorHandler);
       await server.listen();
 
       try {
-        await client.sendCommand({
+        await client.sendRequest({
           id: 'error-cmd',
           channelId: 'test',
-          command: 'error',
-          timestamp: Date.now()
+          request: 'error',
+          timestamp: new Date().toISOString()
         });
         fail('Should have thrown an error');
       } catch (error: any) {
@@ -442,31 +442,31 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
   });
 
   describe('7. Client Activity Tracking', () => {
-    it('should track client timestamps and command counts', async () => {
+    it('should track client timestamps and request counts', async () => {
       const testHandler = async () => ({ result: 'tracked' });
-      server.registerCommandHandler('test', 'track', testHandler);
+      server.registerRequestHandler('test', 'track', testHandler);
       
       await server.listen();
 
       const startTime = Date.now();
       
-      // Send multiple commands
+      // Send multiple requests
       for (let i = 0; i < 3; i++) {
-        await client.sendCommand({
+        await client.sendRequest({
           id: `track-${i}`,
           channelId: 'test',
-          command: 'track',
-          timestamp: Date.now()
+          request: 'track',
+          timestamp: new Date().toISOString()
         });
       }
 
       const clientActivity = server.getClientActivity();
-      expect(clientActivity.length).toBe(3); // Each SOCK_DGRAM command creates a new ephemeral socket = new client
+      expect(clientActivity.length).toBe(3); // Each SOCK_DGRAM request creates a new ephemeral socket = new client
       
       // Verify that all activities have the expected properties
       clientActivity.forEach(activity => {
         expect(activity).toBeDefined();
-        expect(activity.commandCount).toBe(1); // Each ephemeral socket sends exactly 1 command
+        expect(activity.requestCount).toBe(1); // Each ephemeral socket sends exactly 1 request
         expect(activity.lastActivity.getTime()).toBeGreaterThanOrEqual(startTime);
         expect(activity.address).toBeDefined();
       });
@@ -480,15 +480,15 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
       });
 
       const testHandler = async () => ({ result: 'activity' });
-      server.registerCommandHandler('test', 'activity', testHandler);
+      server.registerRequestHandler('test', 'activity', testHandler);
       
       await server.listen();
 
-      await client.sendCommand({
+      await client.sendRequest({
         id: 'activity-cmd',
         channelId: 'test',
-        command: 'activity',
-        timestamp: Date.now()
+        request: 'activity',
+        timestamp: new Date().toISOString()
       });
 
       expect(activityEvents.length).toBeGreaterThan(0);
@@ -497,76 +497,76 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
     });
   });
 
-  describe('8. Command Execution with Timeout', () => {
-    it('should execute commands within timeout limits', async () => {
+  describe('8. Request Execution with Timeout', () => {
+    it('should execute requests within timeout limits', async () => {
       const fastHandler = async () => {
         return { result: 'fast', executionTime: 'under-limit' };
       };
 
-      server.registerCommandHandler('test', 'fast', fastHandler);
+      server.registerRequestHandler('test', 'fast', fastHandler);
       await server.listen();
 
-      const response = await client.sendCommand({
+      const response = await client.sendRequest({
         id: 'fast-cmd',
         channelId: 'test',
-        command: 'fast',
+        request: 'fast',
         timeout: 1.0, // 1 second timeout
-        timestamp: Date.now()
+        timestamp: new Date().toISOString()
       });
 
       expect(response.success).toBe(true);
       expect(response.result?.result).toBe('fast');
     });
 
-    it('should timeout long-running commands', async () => {
+    it('should timeout long-running requests', async () => {
       const slowHandler = async () => {
         await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
         return { result: 'should not reach here' };
       };
 
-      server.registerCommandHandler('test', 'slow', slowHandler);
+      server.registerRequestHandler('test', 'slow', slowHandler);
       await server.listen();
 
       try {
-        await client.sendCommand({
+        await client.sendRequest({
           id: 'slow-cmd',
           channelId: 'test',
-          command: 'slow',
+          request: 'slow',
           timeout: 0.1, // 100ms timeout
-          timestamp: Date.now()
+          timestamp: new Date().toISOString()
         });
-        fail('Command should have timed out');
+        fail('Request should have timed out');
       } catch (error: any) {
         expect(error.message).toContain('timeout');
       }
     });
 
-    it('should handle concurrent command timeouts', async () => {
+    it('should handle concurrent request timeouts', async () => {
       const slowHandler = async (args: any) => {
         const delay = args.delay || 200;
         await new Promise(resolve => setTimeout(resolve, delay));
         return { result: `completed after ${delay}ms` };
       };
 
-      server.registerCommandHandler('test', 'concurrent-slow', slowHandler);
+      server.registerRequestHandler('test', 'concurrent-slow', slowHandler);
       await server.listen();
 
       const promises = [
-        client.sendCommand({
+        client.sendRequest({
           id: 'concurrent-1',
           channelId: 'test',
-          command: 'concurrent-slow',
+          request: 'concurrent-slow',
           args: { delay: 50 }, // Should succeed
           timeout: 0.2,
-          timestamp: Date.now()
+          timestamp: new Date().toISOString()
         }),
-        client.sendCommand({
+        client.sendRequest({
           id: 'concurrent-2',
           channelId: 'test',
-          command: 'concurrent-slow',
+          request: 'concurrent-slow',
           args: { delay: 300 }, // Should timeout
           timeout: 0.1,
-          timestamp: Date.now()
+          timestamp: new Date().toISOString()
         })
       ];
 
@@ -628,44 +628,44 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
     });
   });
 
-  describe('Built-in Commands', () => {
-    it('should handle built-in ping command', async () => {
+  describe('Built-in Requests', () => {
+    it('should handle built-in ping request', async () => {
       await server.listen();
 
-      const response = await client.sendCommand({
+      const response = await client.sendRequest({
         id: 'ping-test',
         channelId: 'system',
-        command: 'ping',
-        timestamp: Date.now()
+        request: 'ping',
+        timestamp: new Date().toISOString()
       });
 
       expect(response.success).toBe(true);
       expect(response.result?.message).toBe('pong');
     });
 
-    it('should handle built-in echo command', async () => {
+    it('should handle built-in echo request', async () => {
       await server.listen();
 
-      const response = await client.sendCommand({
+      const response = await client.sendRequest({
         id: 'echo-test',
         channelId: 'system',
-        command: 'echo',
+        request: 'echo',
         args: { message: 'hello world' },
-        timestamp: Date.now()
+        timestamp: new Date().toISOString()
       });
 
       expect(response.success).toBe(true);
       expect(response.result?.message).toBe('hello world');
     });
 
-    it('should handle built-in get_info command', async () => {
+    it('should handle built-in get_info request', async () => {
       await server.listen();
 
-      const response = await client.sendCommand({
+      const response = await client.sendRequest({
         id: 'info-test',
         channelId: 'system',
-        command: 'get_info',
-        timestamp: Date.now()
+        request: 'get_info',
+        timestamp: new Date().toISOString()
       });
 
       expect(response.success).toBe(true);
@@ -674,30 +674,30 @@ describe('TypeScript Server Features Comprehensive Tests', () => {
       expect(typeof response.result?.activeHandlers).toBe('number');
     });
 
-    it('should handle built-in spec command', async () => {
+    it('should handle built-in manifest request', async () => {
       const testHandler = async () => ({ result: 'test' });
-      server.registerCommandHandler('test-channel', 'test-command', testHandler);
+      server.registerRequestHandler('test-channel', 'test-request', testHandler);
       
       await server.listen();
 
-      const response = await client.sendCommand({
-        id: 'spec-test',
+      const response = await client.sendRequest({
+        id: 'manifest-test',
         channelId: 'system',
-        command: 'spec',
-        timestamp: Date.now()
+        request: 'manifest',
+        timestamp: new Date().toISOString()
       });
 
       expect(response.success).toBe(true);
-      expect(response.result?.specification).toBeDefined();
-      expect(response.result?.specification.version).toBe('1.0.0');
-      expect(response.result?.specification.channels['test-channel']).toBeDefined();
+      expect(response.result?.manifest).toBeDefined();
+      expect(response.result?.manifest.version).toBe('1.0.0');
+      expect(response.result?.manifest.channels['test-channel']).toBeDefined();
     });
   });
 
   describe('Server Statistics', () => {
     it('should provide accurate server statistics', async () => {
       const testHandler = async () => ({ result: 'stats-test' });
-      server.registerCommandHandler('stats-channel', 'stats-command', testHandler);
+      server.registerRequestHandler('stats-channel', 'stats-request', testHandler);
       
       await server.listen();
 

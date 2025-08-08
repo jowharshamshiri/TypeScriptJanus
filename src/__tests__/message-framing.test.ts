@@ -3,28 +3,28 @@
  */
 
 import { MessageFraming } from '../core/message-framing';
-import { JanusCommand, JanusResponse } from '../types/protocol';
+import { JanusRequest, JanusResponse } from '../types/protocol';
 import { JSONRPCErrorClass } from '../types/jsonrpc-error';
 
 describe('MessageFraming', () => {
-  const sampleCommand: JanusCommand = {
+  const sampleRequest: JanusRequest = {
     id: '550e8400-e29b-41d4-a716-446655440000',
-    channelId: 'test-service',
-    command: 'ping',
-    timestamp: 1722248200
+    method: 'ping',
+    request: 'ping',
+    timestamp: '2024-07-29T12:30:00.000Z'
   };
 
   const sampleResponse: JanusResponse = {
-    commandId: '550e8400-e29b-41d4-a716-446655440000',
-    channelId: 'test-service',
+    request_id: '550e8400-e29b-41d4-a716-446655440000',
+    id: '550e8400-e29b-41d4-a716-446655440001',
     success: true,
     result: { pong: true },
-    timestamp: 1722248201
+    timestamp: '2024-07-29T12:30:01.000Z'
   };
 
   describe('encodeMessage', () => {
-    it('should encode a command message', () => {
-      const encoded = MessageFraming.encodeMessage(sampleCommand);
+    it('should encode a request message', () => {
+      const encoded = MessageFraming.encodeMessage(sampleRequest);
       
       expect(encoded).toBeInstanceOf(Buffer);
       expect(encoded.length).toBeGreaterThan(4); // At least length prefix + content
@@ -45,23 +45,23 @@ describe('MessageFraming', () => {
     });
 
     it('should throw error for messages that are too large', () => {
-      const largeCommand = {
-        ...sampleCommand,
+      const largeRequest = {
+        ...sampleRequest,
         args: { data: 'x'.repeat(20 * 1024 * 1024) } // 20MB
       };
       
       expect(() => {
-        MessageFraming.encodeMessage(largeCommand);
+        MessageFraming.encodeMessage(largeRequest);
       }).toThrow(JSONRPCErrorClass);
     });
   });
 
   describe('decodeMessage', () => {
-    it('should decode a command message', () => {
-      const encoded = MessageFraming.encodeMessage(sampleCommand);
+    it('should decode a request message', () => {
+      const encoded = MessageFraming.encodeMessage(sampleRequest);
       const { message, remainingBuffer } = MessageFraming.decodeMessage(encoded);
       
-      expect(message).toEqual(sampleCommand);
+      expect(message).toEqual(sampleRequest);
       expect(remainingBuffer.length).toBe(0);
     });
 
@@ -74,13 +74,13 @@ describe('MessageFraming', () => {
     });
 
     it('should handle multiple messages in buffer', () => {
-      const encoded1 = MessageFraming.encodeMessage(sampleCommand);
+      const encoded1 = MessageFraming.encodeMessage(sampleRequest);
       const encoded2 = MessageFraming.encodeMessage(sampleResponse);
       const combined = Buffer.concat([encoded1, encoded2]);
       
       // Extract first message
       const { message: message1, remainingBuffer } = MessageFraming.decodeMessage(combined);
-      expect(message1).toEqual(sampleCommand);
+      expect(message1).toEqual(sampleRequest);
       
       // Extract second message
       const { message: message2, remainingBuffer: final } = MessageFraming.decodeMessage(remainingBuffer);
@@ -97,7 +97,7 @@ describe('MessageFraming', () => {
     });
 
     it('should throw error for incomplete message', () => {
-      const encoded = MessageFraming.encodeMessage(sampleCommand);
+      const encoded = MessageFraming.encodeMessage(sampleRequest);
       const truncated = encoded.subarray(0, encoded.length - 10); // Remove last 10 bytes
       
       expect(() => {
@@ -116,20 +116,20 @@ describe('MessageFraming', () => {
 
   describe('extractMessages', () => {
     it('should extract multiple complete messages', () => {
-      const encoded1 = MessageFraming.encodeMessage(sampleCommand);
+      const encoded1 = MessageFraming.encodeMessage(sampleRequest);
       const encoded2 = MessageFraming.encodeMessage(sampleResponse);
       const combined = Buffer.concat([encoded1, encoded2]);
       
       const { messages, remainingBuffer } = MessageFraming.extractMessages(combined);
       
       expect(messages).toHaveLength(2);
-      expect(messages[0]).toEqual(sampleCommand);
+      expect(messages[0]).toEqual(sampleRequest);
       expect(messages[1]).toEqual(sampleResponse);
       expect(remainingBuffer.length).toBe(0);
     });
 
     it('should handle partial messages', () => {
-      const encoded1 = MessageFraming.encodeMessage(sampleCommand);
+      const encoded1 = MessageFraming.encodeMessage(sampleRequest);
       const encoded2 = MessageFraming.encodeMessage(sampleResponse);
       const combined = Buffer.concat([encoded1, encoded2]);
       
@@ -139,7 +139,7 @@ describe('MessageFraming', () => {
       const { messages, remainingBuffer } = MessageFraming.extractMessages(partial);
       
       expect(messages).toHaveLength(1);
-      expect(messages[0]).toEqual(sampleCommand);
+      expect(messages[0]).toEqual(sampleRequest);
       expect(remainingBuffer.length).toBe(10); // Partial second message
     });
 
@@ -162,8 +162,8 @@ describe('MessageFraming', () => {
 
   describe('calculateFramedSize', () => {
     it('should calculate correct framed size', () => {
-      const size = MessageFraming.calculateFramedSize(sampleCommand);
-      const encoded = MessageFraming.encodeMessage(sampleCommand);
+      const size = MessageFraming.calculateFramedSize(sampleRequest);
+      const encoded = MessageFraming.encodeMessage(sampleRequest);
       
       expect(size).toBe(encoded.length);
     });
@@ -171,31 +171,31 @@ describe('MessageFraming', () => {
 
   describe('encodeDirectMessage', () => {
     it('should encode message without envelope', () => {
-      const encoded = MessageFraming.encodeDirectMessage(sampleCommand);
+      const encoded = MessageFraming.encodeDirectMessage(sampleRequest);
       
       expect(encoded).toBeInstanceOf(Buffer);
       expect(encoded.length).toBeGreaterThan(4);
       
       // Should be smaller than envelope version (no base64 overhead)
-      const envelopeEncoded = MessageFraming.encodeMessage(sampleCommand);
+      const envelopeEncoded = MessageFraming.encodeMessage(sampleRequest);
       expect(encoded.length).toBeLessThan(envelopeEncoded.length);
     });
   });
 
   describe('decodeDirectMessage', () => {
     it('should decode direct message without envelope', () => {
-      const encoded = MessageFraming.encodeDirectMessage(sampleCommand);
+      const encoded = MessageFraming.encodeDirectMessage(sampleRequest);
       const { message, remainingBuffer } = MessageFraming.decodeDirectMessage(encoded);
       
-      expect(message).toEqual(sampleCommand);
+      expect(message).toEqual(sampleRequest);
       expect(remainingBuffer.length).toBe(0);
     });
 
-    it('should roundtrip command through direct encoding', () => {
-      const encoded = MessageFraming.encodeDirectMessage(sampleCommand);
+    it('should roundtrip request through direct encoding', () => {
+      const encoded = MessageFraming.encodeDirectMessage(sampleRequest);
       const { message } = MessageFraming.decodeDirectMessage(encoded);
       
-      expect(message).toEqual(sampleCommand);
+      expect(message).toEqual(sampleRequest);
     });
 
     it('should roundtrip response through direct encoding', () => {
