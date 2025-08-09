@@ -8,9 +8,15 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
+import debug from 'debug';
 import { JanusRequest, JanusResponse } from '../types/protocol';
 import { SecurityValidator } from '../core/security-validator';
 import { JSONRPCErrorBuilder, JSONRPCErrorCode } from '../types/jsonrpc-error';
+
+// Debug loggers - can be enabled with DEBUG=janus:server:* 
+const debugInfo = debug('janus:server:info');
+const debugVerbose = debug('janus:server:debug'); 
+const debugError = debug('janus:server:error');
 
 export interface JanusServerEvents {
   'listening': () => void;
