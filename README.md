@@ -23,9 +23,18 @@ npm install typescript-unix-sock-api
 
 ## Quick Start
 
-### API Manifest (Manifest)
+## Installation
 
-Before creating servers or clients, you need a Manifest file defining your API:
+```bash
+# Use local path for development
+npm install typescript-janus@file:../TypeScriptJanus
+```
+
+## Quick Start
+
+### API Manifest
+
+Before creating servers or clients, you need a manifest file defining your API:
 
 **my-api-manifest.json:**
 ```json
@@ -33,61 +42,42 @@ Before creating servers or clients, you need a Manifest file defining your API:
   "name": "My Application API",
   "version": "1.0.0",
   "description": "Example API for demonstration",
-  "channels": {
-    "default": {
-      "requests": {
-        "get_user": {
-          "description": "Retrieve user information",
-          "arguments": {
-            "user_id": {
-              "type": "string",
-              "required": true,
-              "description": "User identifier"
-            }
-          },
-          "response": {
-            "type": "object",
-            "properties": {
-              "id": {"type": "string"},
-              "name": {"type": "string"},
-              "email": {"type": "string"}
-            }
-          }
-        },
-        "update_profile": {
-          "description": "Update user profile",
-          "arguments": {
-            "user_id": {"type": "string", "required": true},
-            "name": {"type": "string", "required": false},
-            "email": {"type": "string", "required": false}
-          },
-          "response": {
-            "type": "object",
-            "properties": {
-              "success": {"type": "boolean"},
-              "updated_fields": {"type": "array"}
-            }
-          }
+  "models": {
+    "GetUserRequest": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "User identifier"
         }
+      },
+      "required": ["user_id"]
+    },
+    "GetUserResponse": {
+      "type": "object",
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "email": {"type": "string"}
       }
     }
   }
 }
 ```
 
-**Note**: Built-in requests (`ping`, `echo`, `get_info`, `validate`, `slow_process`, `manifest`) are always available and cannot be overridden in Manifests.
+**Note**: Built-in requests (`ping`, `echo`, `get_info`, `validate`, `slow_process`, `manifest`) are always available and cannot be overridden in manifests.
 
 ### Simple Client Example
 
 ```typescript
-import { JanusClient } from 'typescript-unix-sock-api';
+import { JanusClient, JanusClientConfig } from 'typescript-janus';
 
 async function main() {
   // Create client - manifest is fetched automatically from server
-  const client = await JanusClient.create({
-    socketPath: '/tmp/my-server.sock',
-    channelId: 'default'
-  });
+  const config: JanusClientConfig = {
+    socketPath: '/tmp/my-server.sock'
+  };
+  const client = await JanusClient.create(config);
 
   // Built-in requests (always available)
   const response = await client.sendRequest('ping');
@@ -95,7 +85,7 @@ async function main() {
     console.log('Server ping:', response.result);
   }
 
-  // Custom request defined in Manifest (arguments validated automatically)
+  // Custom request defined in manifest (arguments validated automatically)
   const userArgs = {
     user_id: 'user123'
   };
@@ -162,35 +152,34 @@ main().catch(console.error);
 ### Server Usage
 
 ```typescript
-import { JanusServer, JSONRPCError } from 'typescript-unix-sock-api';
-import manifest from './my-api-manifest.json';
+import { JanusServer, JSONRPCError } from 'typescript-janus';
 
 async function main() {
-  // Load API manifest from Manifest file
-  const server = await JanusServer.fromManifestFile('my-api-manifest.json');
+  // Create server
+  const server = new JanusServer({ socketPath: '/tmp/my-server.sock' });
   
-  // Register handlers for requests defined in the Manifest
-  server.registerRequestHandler('default', 'get_user', async (args) => {
-    if (!args.user_id) {
+  // Register handlers for custom requests defined in the manifest
+  server.registerRequestHandler('get_user', async (request) => {
+    if (!request.args?.user_id) {
       throw new JSONRPCError(-32602, 'Missing user_id argument');
     }
     
     // Simulate user lookup
     return {
-      id: args.user_id,
+      id: request.args.user_id,
       name: 'John Doe',
       email: 'john@example.com'
     };
   });
   
-  server.registerRequestHandler('default', 'update_profile', async (args) => {
-    if (!args.user_id) {
+  server.registerRequestHandler('update_profile', async (request) => {
+    if (!request.args?.user_id) {
       throw new JSONRPCError(-32602, 'Missing user_id argument');
     }
     
     const updatedFields = [];
-    if (args.name) updatedFields.push('name');
-    if (args.email) updatedFields.push('email');
+    if (request.args.name) updatedFields.push('name');
+    if (request.args.email) updatedFields.push('email');
     
     return {
       success: true,
@@ -199,7 +188,7 @@ async function main() {
   });
   
   // Start listening (blocks until stopped)
-  await server.startListening('/tmp/my-server.sock');
+  await server.listen();
   console.log('Server listening on /tmp/my-server.sock...');
 }
 
@@ -209,14 +198,14 @@ main().catch(console.error);
 ### Client Usage
 
 ```typescript
-import { JanusClient } from 'typescript-unix-sock-api';
+import { JanusClient, JanusClientConfig } from 'typescript-janus';
 
 async function main() {
   // Create client - manifest is fetched automatically from server
-  const client = await JanusClient.create({
-    socketPath: '/tmp/my-server.sock',
-    channelId: 'default'
-  });
+  const config: JanusClientConfig = {
+    socketPath: '/tmp/my-server.sock'
+  };
+  const client = await JanusClient.create(config);
 
   // Built-in requests (always available)
   const response = await client.sendRequest('ping');
@@ -224,7 +213,7 @@ async function main() {
     console.log('Server ping:', response.result);
   }
 
-  // Custom request defined in Manifest (arguments validated automatically)
+  // Custom request defined in manifest (arguments validated automatically)
   const userArgs = {
     user_id: 'user123'
   };
@@ -235,14 +224,6 @@ async function main() {
   } else {
     console.log('Error:', userResponse.error);
   }
-  
-  // Fire-and-forget request (no response expected)
-  const logArgs = {
-    level: 'info',
-    message: 'User profile updated'
-  };
-  
-  await client.sendRequestNoResponse('log_event', logArgs);
   
   // Get server API manifest
   const manifestResponse = await client.sendRequest('manifest');
